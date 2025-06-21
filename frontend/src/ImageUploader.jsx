@@ -4,11 +4,11 @@ import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import axios from 'axios';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import './ImageUploader.css';
+import Quiz from './Quiz.jsx';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
 
 function preprocessCanvas(canvas) {
-  // ... (this helper function is perfect, no changes needed)
   const ctx = canvas.getContext('2d');
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
@@ -31,6 +31,13 @@ function ImageUploader() {
   const [ocrText, setOcrText] = useState('');
   const [fileName, setFileName] = useState('');
   const [quizData, setQuizData] = useState(null);
+  const [refinement, setRefinement] = useState('');
+
+  // MODIFIED: This function now resets only the quiz, not the document.
+  const handleGenerateNewQuiz = () => {
+    setQuizData(null);
+    setRefinement('');
+  };
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
@@ -40,15 +47,14 @@ function ImageUploader() {
       setOcrText('');
       setProgress(0);
       setQuizData(null);
+      setRefinement('');
     }
   };
 
   const processFile = async () => {
     if (!selectedFile) return;
-
-    setIsLoading(true); // FIX: Set loading true at the very beginning of the process.
-    setQuizData(null);  // Clear any previous quiz
-    
+    setIsLoading(true);
+    setQuizData(null);
     try {
       let extractedText = '';
       if (selectedFile.type.startsWith('image/')) {
@@ -57,25 +63,20 @@ function ImageUploader() {
         extractedText = await processPdf(selectedFile);
       } else {
         alert('Unsupported file type.');
+        setIsLoading(false);
         return;
       }
-      
-      setOcrText(extractedText); // Update the state with the final extracted text
-
-      if (extractedText) {
-        await generateQuiz(extractedText);
-      }
+      setOcrText(extractedText);
     } catch (error) {
       console.error("An error occurred during file processing:", error);
       alert("Sorry, something went wrong during processing.");
     } finally {
-      setIsLoading(false); // FIX: Set loading false at the very end, no matter what.
+      setIsLoading(false);
     }
   };
 
   const processImage = async (file) => {
-    // FIX: This function now only does one thing: OCR. No more state setting.
-    const { data: { text } } = await Tesseract.recognize(file, 'eng', { // FIX: Added await
+    const { data: { text } } = await Tesseract.recognize(file, 'eng', {
       logger: (m) => {
         if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 100));
       },
@@ -84,7 +85,6 @@ function ImageUploader() {
   };
 
   const processPdf = async (file) => {
-    // FIX: This function now only does one thing: PDF processing. No more state setting.
     const fileReader = new FileReader();
     return new Promise((resolve, reject) => {
       fileReader.onload = async () => {
@@ -93,7 +93,7 @@ function ImageUploader() {
           const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
           let fullText = '';
           for (let i = 1; i <= pdf.numPages; i++) {
-            setProgress(Math.round((i / pdf.numPages) * 50)); // OCR is the second 50%
+            setProgress(Math.round((i / pdf.numPages) * 100));
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             if (textContent.items.length > 0) {
@@ -120,45 +120,71 @@ function ImageUploader() {
     });
   };
 
-  const generateQuiz = async (text) => {
-    // FIX: This function now only handles the quiz generation API call.
-    setProgress(100); // Set progress to 100 as we start the final step
+  const generateQuiz = async () => {
+    if (!ocrText) {
+      alert("No text has been extracted yet!");
+      return;
+    }
+    setIsLoading(true);
+    setProgress(0);
     try {
-      const response = await axios.post('http://localhost:3001/generate-quiz', { text });
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await axios.post(`${apiUrl}/generate-quiz`, {  
+        text: ocrText, 
+        refinementText: refinement 
+      });
       setQuizData(response.data);
     } catch (error) {
       console.error("Error fetching quiz data:", error);
       alert("Sorry, there was an error creating the quiz.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="uploader-container">
-      {/* ... (The input and button JSX is unchanged) ... */}
-      <input type="file" id="fileInput" accept="image/*,application/pdf" onChange={handleFileChange} className="uploader-input" />
-      <label htmlFor="fileInput" className="uploader-label">{fileName ? `Selected: ${fileName}` : 'Choose Image or PDF'}</label>
-      {selectedFile && (
-        <button onClick={processFile} className="process-button" disabled={isLoading}>
-          {isLoading ? `Processing... ${progress}%` : 'Generate Quiz'}
-        </button>
-      )}
+      {quizData ? (
+        // MODIFIED: We pass the new handleGenerateNewQuiz function to the Quiz component
+        <Quiz quizData={quizData} onGenerateNew={handleGenerateNewQuiz} />
+      ) : (
+        <>
+          <input type="file" id="fileInput" accept="image/*,application/pdf" onChange={handleFileChange} className="uploader-input" />
+          <label htmlFor="fileInput" className="uploader-label">{fileName ? `Selected: ${fileName}` : 'Choose Image or PDF'}</label>
+          
+          {selectedFile && !ocrText && (
+            <button onClick={processFile} className="process-button" disabled={isLoading}>
+              {isLoading ? `Extracting... ${progress}%` : '1. Extract Text from File'}
+            </button>
+          )}
 
-      {isLoading && (
-        <div className="progress-container">
-          <p>This may take a moment...</p>
-          <div className="progress-bar-container">
-            <div className="progress-bar" style={{ width: `${progress}%` }}></div>
-          </div>
-        </div>
-      )}
+          {ocrText && (
+            <>
+              <div className="refinement-container">
+                <label htmlFor="refinementInput">Optional: Add instructions for the quiz</label>
+                <textarea
+                  id="refinementInput"
+                  className="refinement-input"
+                  placeholder='e.g., "focus on ingredients", "ignore prices"'
+                  value={refinement}
+                  onChange={(e) => setRefinement(e.target.value)}
+                />
+              </div>
+              <button onClick={generateQuiz} className="process-button" disabled={isLoading}>
+                {isLoading ? `Generating...` : '2. Generate Quiz'}
+              </button>
+            </>
+          )}
 
-      {/* FIX: This condition is now safe and checks for quizData */}
-      {quizData && !isLoading && (
-        <div className="results-container">
-          <h3>Quiz is Ready!</h3>
-          <p>We've generated a {quizData.length}-question quiz for you.</p>
-          {/* We will build the actual game interface in the next step! */}
-        </div>
+          {isLoading && (
+            <div className="progress-container">
+              <p>This may take a moment...</p>
+              <div className="progress-bar-container">
+                <div className="progress-bar" style={{ width: `${progress}%` }}></div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
