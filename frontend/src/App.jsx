@@ -1,11 +1,13 @@
 import ImageUploader from './ImageUploader.jsx';
+import './App.css'; // <-- Import the App's CSS
 
 function App() {
   return (
-    <div style={{ padding: '50px' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '30px' }}>DocuGame Prototype</h1>
+    // Use className for the main container
+    <main className="app-container">
+      <h1>DocuGame Prototype</h1>
       <ImageUploader />
-    </div>
+    </main>
   )
 }
 

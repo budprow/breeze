@@ -1,0 +1,134 @@
+/* --- Default Mobile Styles --- */
+/* These styles apply to ALL screen sizes unless overridden below. */
+
+.uploader-container {
+  border: 2px dashed #ccc;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  max-width: 500px; /* Prevents it from getting too wide on large phones */
+  margin: 0 auto; /* This centers the container */
+}
+
+.uploader-input {
+  /* We keep the actual input hidden */
+  display: none;
+}
+
+.uploader-label {
+  /* This is our custom "button" */
+  cursor: pointer;
+  padding: 12px 24px;
+  background-color: #007bff;
+  color: white;
+  border-radius: 5px;
+  font-size: 1rem; /* Use 'rem' for accessible font sizing */
+  display: inline-block; /* Allows padding and margin */
+  transition: background-color 0.2s;
+}
+
+.uploader-label:hover {
+  background-color: #0056b3;
+}
+
+.feedback-text {
+  margin-top: 15px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* --- Media Query for Larger Screens --- */
+/* These styles ONLY apply when the screen width is 768px or WIDER. */
+
+@media (min-width: 768px) {
+  .uploader-container {
+    padding: 40px; /* More space on larger screens */
+  }
+
+  .uploader-label {
+    font-size: 1.1rem; /* Slightly larger button text */
+  }
+
+  .feedback-text {
+    font-size: 1rem;
+  }
+}
+
+/* --- New Styles for OCR Elements --- */
+
+/*
+.process-button {
+  This is our new button to start the OCR
+  margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 1rem;
+  color: white;
+  background-color: #28a745; /* A green color
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+*/
+
+.progress-bar {
+  width: 0%; 
+  height: 10px; /* Made the bar slimmer */
+  background-color: #007bff;
+  /* REMOVE the color, display, align-items, justify-content properties */
+  border-radius: 5px;
+  transition: width 0.3s ease-in-out;
+}
+
+.process-button:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.process-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  color: #666; /* Added for better text visibility when disabled */
+}
+
+.progress-container {
+  margin-top: 20px;
+  width: 100%;
+}
+
+.progress-bar-container {
+  background-color: #e9ecef;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.progress-bar {
+  width: 0%; /* Starts at 0, width is updated by inline style */
+  height: 30px;
+  background-color: #007bff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  transition: width 0.3s ease-in-out;
+}
+
+.results-container {
+  margin-top: 20px;
+  text-align: left;
+  width: 100%;
+}
+
+.results-container h3 {
+  margin-bottom: 10px;
+}
+
+.results-container textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  white-space: pre-wrap; /* Ensures text wraps properly */
+}
