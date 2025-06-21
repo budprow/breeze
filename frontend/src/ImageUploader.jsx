@@ -12,6 +12,32 @@ import './ImageUploader.css';
 // This line tells pdf.js where to find its worker file.
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
 
+// NEW HELPER FUNCTION TO IMPROVE IMAGE QUALITY FOR OCR
+function preprocessCanvas(canvas) {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    // Convert to grayscale
+    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    data[i] = avg;     // red
+    data[i + 1] = avg; // green
+    data[i + 2] = avg; // blue
+
+    // A simple contrast boost - this is a basic example
+    const contrast = 1.5; 
+    let value = (avg - 128) * contrast + 128;
+    if (value > 255) value = 255;
+    if (value < 0) value = 0;
+    
+    data[i] = value;
+    data[i+1] = value;
+    data[i+2] = value;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
 
 function ImageUploader() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -74,13 +100,16 @@ function ImageUploader() {
         if (textContent.items.length > 0) {
           fullText += textContent.items.map((item) => item.str).join(' ');
         } else {
-          const viewport = page.getViewport({ scale: 2 });
+          // viewport "scale" between 2-5, renders a higher res, slowier process
+          const viewport = page.getViewport({ scale: 3 });
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           canvas.height = viewport.height;
           canvas.width = viewport.width;
 
           await page.render({ canvasContext: context, viewport: viewport }).promise;
+          // PRE-PROCESS THE CANVAS
+          const preprocessedCanvas = preprocessCanvas(canvas);
           const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
           fullText += text;
         }
