@@ -14,3 +14,10 @@
 # OS-specific
 .DS_Store
 
+# ... other ignored files
+/frontend/dist
+/frontend/node_modules
+
+# Add these new lines
+/backend/node_modules
+/backend/.env
