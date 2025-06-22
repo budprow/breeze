@@ -2,96 +2,122 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 
 const app = express();
 const port = 3001;
 
-// Middleware to allow cross-origin requests and parse JSON bodies
 app.use(cors());
 app.use(express.json());
 
-// Initialize the Google AI Client with the API key from the .env file
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// Define the single API endpoint for generating quizzes
+const parseJsonFromAiResponse = (rawText) => {
+  if (rawText.includes('```')) {
+    const cleanedText = rawText.substring(rawText.indexOf('\n') + 1, rawText.lastIndexOf('```'));
+    return JSON.parse(cleanedText);
+  } else {
+    return JSON.parse(rawText);
+  }
+};
+
 app.post('/generate-quiz', async (req, res) => {
   try {
-    // Expect both 'text' and 'refinementText' from the frontend
     const { text, refinementText } = req.body;
-
     if (!text) {
       return res.status(400).send('No text provided.');
     }
 
-    // Dynamically create an instruction string if refinementText exists
-    let userInstruction = '';
+    // --- RAG WORKFLOW START ---
+
+    // --- STEP 1: Extract Key Terms (NOW WITH USER GUIDANCE) ---
+    console.log("STEP 1: Extracting key terms with user guidance...");
+
+    // MODIFIED: Create a dynamic instruction for the term extractor
+    let termFocusInstruction = 'Give a general selection of important terms.';
     if (refinementText) {
-      userInstruction = `
-        IMPORTANT: You must follow this special instruction when creating the questions: "${refinementText}".
-      `;
+      termFocusInstruction = `Your primary focus for selecting terms MUST be guided by the following user instruction: "${refinementText}".`;
     }
 
-    // Construct the full prompt to send to the AI
-    const prompt = `
-      Based on the following text, create a quiz with 5 to 7 multiple-choice questions.
-      The questions should be designed to test key information from the text.
-      ${userInstruction}
-      Return the response ONLY as a valid JSON array of objects.
-      Do not include any other text or explanations before or after the JSON array.
-      Each object in the array should have the following structure:
-      {
-        "question": "The question text",
-        "options": ["Option A", "Option B", "Option C", "Option D"],
-        "answer": "The correct option text"
-      }
+    // MODIFIED: Inject the dynamic instruction into the prompt
+    const termExtractionPrompt = `
+      You are a research assistant. From the following text, extract a list of up to 5 specific, important proper nouns or specialized terms that would be good for looking up in an encyclopedia.
+      ${termFocusInstruction}
+      Return them ONLY as a valid JSON array of strings inside a json markdown block. For example: \`\`\`json\n["Term 1", "Term 2"]\n\`\`\`.
+      
+      Text: "${text}"
+    `;
+    
+    const termResult = await model.generateContent(termExtractionPrompt);
+    const termResponse = await termResult.response;
+    const keyTermsText = termResponse.text();
+    console.log("Raw AI Response for terms:", keyTermsText);
+    
+    const keyTerms = parseJsonFromAiResponse(keyTermsText);
+    console.log("Found key terms:", keyTerms);
 
-      Here is the text:
+    // --- STEP 2: Retrieve Knowledge from Wikipedia (No changes here) ---
+    console.log("STEP 2: Looking up terms on Wikipedia...");
+    let knowledgeBase = '';
+    
+    const lookupPromises = keyTerms.map(async (term) => {
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(term)}`;
+        const wikiResponse = await axios.get(wikiUrl);
+        const pages = wikiResponse.data.query.pages;
+        const pageId = Object.keys(pages)[0];
+        if (pageId !== "-1" && pages[pageId].extract) {
+          return `- ${term}: ${pages[pageId].extract.split('. ').slice(0, 2).join('. ')}.`;
+        }
+        return null;
+      } catch (e) {
+        console.error(`Could not fetch Wikipedia article for "${term}"`);
+        return null;
+      }
+    });
+
+    const resolvedKnowledge = await Promise.all(lookupPromises);
+    knowledgeBase = resolvedKnowledge.filter(item => item !== null).join('\n');
+    console.log("Constructed knowledge base:", knowledgeBase);
+    
+    // --- STEP 3: Augment the final prompt (No changes here) ---
+    console.log("STEP 3: Generating final quiz with augmented prompt...");
+    let userInstruction = refinementText ? `IMPORTANT: Follow this special instruction: "${refinementText}".` : '';
+
+    const finalPrompt = `
+      You are a helpful quiz creator. Your task is to create a quiz based on the "Primary Document Text" below.
+      Use the "Additional Contextual Knowledge" to ask more insightful questions that connect the terms in the document to their real-world meaning.
+
+      **Primary Document Text:**
       ---
       ${text}
       ---
+
+      **Additional Contextual Knowledge:**
+      ---
+      ${knowledgeBase}
+      ---
+      
+      **Instructions:**
+      ${userInstruction}
+      Create a quiz with 5 to 7 multiple-choice questions.
+      Return the response ONLY as a valid JSON array of objects inside a json markdown block.
+      Each object should have the structure: {"question": "...", "options": ["...", "...", "...", "..."], "answer": "..."}
     `;
 
-    // Call the AI model with the prompt and the temperature setting
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.8, // Higher value (e.g., 0.8) means more creative, less repetitive
-      },
+    // --- STEP 4: Generate the Final Quiz (No changes here) ---
+    const finalResult = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
+      generationConfig: { temperature: 0.7 },
     });
-    
-    const response = await result.response;
-    const aiText = response.text();
 
-    console.log("Raw AI Response Text:", aiText); // Log for debugging
+    const finalResponse = await finalResult.response;
+    const aiText = finalResponse.text();
+    console.log("Raw AI Response for Quiz:", aiText);
 
-    // Robustly find and parse the JSON from the AI's potentially messy response
-    const firstBracket = aiText.indexOf('[');
-    const lastBracket = aiText.lastIndexOf(']');
-    const firstBrace = aiText.indexOf('{');
-    const lastBrace = aiText.lastIndexOf('}');
-
-    let startIndex = -1;
-    let endIndex = -1;
-
-    // Prioritize parsing an array of objects
-    if (firstBracket !== -1 && lastBracket !== -1) {
-        startIndex = firstBracket;
-        endIndex = lastBracket;
-    } 
-    // Fallback to parsing a single object if no array is found
-    else if (firstBrace !== -1 && lastBrace !== -1) {
-        startIndex = firstBrace;
-        endIndex = lastBrace;
-    }
-
-    if (startIndex !== -1 && endIndex !== -1) {
-        const jsonString = aiText.substring(startIndex, endIndex + 1);
-        const quizJson = JSON.parse(jsonString);
-        res.json(quizJson);
-    } else {
-        throw new Error("Could not find valid JSON in the AI response.");
-    }
+    const quizJson = parseJsonFromAiResponse(aiText);
+    res.json(quizJson);
 
   } catch (error) {
     console.error("Error in /generate-quiz endpoint:", error);
@@ -99,7 +125,6 @@ app.post('/generate-quiz', async (req, res) => {
   }
 });
 
-// Start the server
 app.listen(port, () => {
   console.log(`Backend server listening on http://localhost:${port}`);
 });

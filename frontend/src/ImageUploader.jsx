@@ -149,7 +149,7 @@ function ImageUploader() {
         <Quiz quizData={quizData} onGenerateNew={handleGenerateNewQuiz} />
       ) : (
         <>
-          <input type="file" id="fileInput" accept="image/*,application/pdf" onChange={handleFileChange} className="uploader-input" />
+          <input type="file" id="fileInput" accept="image/*,application/pdf,.txt,.doc,.docx"  onChange={handleFileChange} className="uploader-input" />
           <label htmlFor="fileInput" className="uploader-label">{fileName ? `Selected: ${fileName}` : 'Choose Image or PDF'}</label>
           
           {selectedFile && !ocrText && (
