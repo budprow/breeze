@@ -1,0 +1,46 @@
+.uploader-card {
+  background-color: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.upload-label {
+  display: block;
+  padding: 10px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+.upload-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.upload-button:disabled {
+  background-color: #ccc;
+}
+.error-text {
+  color: #dc3545;
+  margin-top: 10px;
+}
+.progress-bar-container {
+  width: 100%;
+  background-color: #e9ecef;
+  border-radius: 5px;
+  margin-top: 10px;
+}
+.progress-bar {
+  height: 24px;
+  background-color: #007bff;
+  color: white;
+  text-align: center;
+  line-height: 24px;
+  border-radius: 5px;
+  transition: width 0.3s ease-in-out;
+}

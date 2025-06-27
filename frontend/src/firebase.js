@@ -3,6 +3,8 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; 
 
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -21,3 +23,5 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize and export Firebase Authentication
 export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);

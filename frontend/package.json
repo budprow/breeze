@@ -15,7 +15,9 @@
     "pdfjs-dist": "^5.3.31",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tesseract.js": "^6.0.1"
+    "react-firebase-hooks": "^5.1.1",
+    "tesseract.js": "^6.0.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
