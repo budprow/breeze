@@ -1,23 +1,16 @@
 # Dependencies
-/frontend/node_modules
-/backend/node_modules
+/frontend/node_modules/
+/backend/node_modules/
 
 # Vite build output
-/frontend/dist
+/frontend/dist/
 
 # Environment files
 /backend/.env
+backend/serviceAccountKey.json
 
 # Log files
 *.log
 
 # OS-specific
 .DS_Store
-
-# ... other ignored files
-/frontend/dist
-/frontend/node_modules
-
-# Add these new lines
-/backend/node_modules
-/backend/.env

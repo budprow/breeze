@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
+const admin = require('firebase-admin');
 
 const app = express();
 const port = 3001;
@@ -12,6 +13,12 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+const serviceAccount = require('./serviceAccountKey.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+const firestore = admin.firestore();
 
 const parseJsonFromAiResponse = (rawText) => {
   if (rawText.includes('```')) {
@@ -27,7 +34,7 @@ app.post('/generate-quiz', async (req, res) => {
     const { text, refinementText } = req.body;
     if (!text) {
       return res.status(400).send('No text provided.');
-    }
+    }   
 
     // --- RAG WORKFLOW START ---
 
@@ -122,6 +129,59 @@ app.post('/generate-quiz', async (req, res) => {
   } catch (error) {
     console.error("Error in /generate-quiz endpoint:", error);
     res.status(500).send('Failed to generate quiz due to a server error.');
+  }
+});
+
+app.post('/complete-invite', async (req, res) => {
+  const { email, password, inviteCode } = req.body;
+
+  if (!email || !password || !inviteCode) {
+    return res.status(400).json({ error: 'Missing required fields.' });
+  }
+
+  const db = admin.firestore();
+  let inviteData;
+  let restaurantId;
+
+  try {
+    // Find the invite document by searching all 'invites' subcollections
+    const invitesQuery = db.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode);
+    const querySnapshot = await invitesQuery.get();
+
+    if (querySnapshot.empty) {
+      return res.status(404).json({ error: 'Invite code not found.' });
+    }
+    
+    const inviteDoc = querySnapshot.docs[0];
+    inviteData = inviteDoc.data();
+    restaurantId = inviteDoc.ref.parent.parent.id; // Get the parent restaurant ID
+
+    if (inviteData.used) {
+      return res.status(400).json({ error: 'This invite code has already been used.' });
+    }
+
+    // Create the new employee user in Firebase Auth
+    const userRecord = await admin.auth().createUser({ email, password });
+
+    // Create the user profile in Firestore
+    await db.collection('users').doc(userRecord.uid).set({
+      email: email,
+      role: 'employee',
+      restaurantId: restaurantId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Mark the invite as used
+    await inviteDoc.ref.update({ used: true });
+
+    res.status(201).json({ message: 'Employee account created successfully!' });
+
+  } catch (error) {
+    console.error("Error completing invite:", error);
+    if (error.code === 'auth/email-already-exists') {
+        return res.status(400).json({error: 'This email address is already in use.'});
+    }
+    res.status(500).json({ error: 'Server error while creating employee account.' });
   }
 });
 
