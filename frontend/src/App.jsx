@@ -4,15 +4,14 @@ import { doc } from 'firebase/firestore';
 import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { auth, db } from './firebase';
 
-import Auth from './components/Auth';
-import Dashboard from './components/dashboard';
+import Auth from './components/auth';
+import Dashboard from './components/Dashboard'; // <-- THIS IS THE FIX (Correct capitalization)
 import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // MODIFIED: This hook will now ONLY run if the user is not anonymous.
   const [userProfile, profileLoading] = useDocumentData(
     user && !user.isAnonymous ? doc(db, 'users', user.uid) : null
   );
@@ -29,8 +28,6 @@ function App() {
     await signOut(auth);
   };
 
-  // MODIFIED: The main loading condition is now smarter.
-  // It only waits for profileLoading if the user isn't a guest.
   const isLoading = authLoading || (user && !user.isAnonymous && profileLoading);
 
   if (isLoading) {
@@ -51,7 +48,6 @@ function App() {
       
       <main className="app-container">
         {user ? (
-          // MODIFIED: Pass both the auth user and the profile down to the Dashboard
           <Dashboard user={user} userProfile={userProfile} />
         ) : (
           <Auth />

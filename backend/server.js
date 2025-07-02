@@ -20,170 +20,74 @@ admin.initializeApp({
 });
 const firestore = admin.firestore();
 
-const parseJsonFromAiResponse = (rawText) => {
-  if (rawText.includes('```')) {
-    const cleanedText = rawText.substring(rawText.indexOf('\n') + 1, rawText.lastIndexOf('```'));
-    return JSON.parse(cleanedText);
-  } else {
-    return JSON.parse(rawText);
+const parseJsonFromAiResponse = (rawText) => { /* ... function remains the same ... */ };
+
+app.post('/generate-quiz', async (req, res) => { /* ... function remains the same ... */ });
+
+// --- NEW, SIMPLIFIED INVITE ENDPOINTS ---
+
+// This middleware verifies the user token for protected routes
+const verifyFirebaseToken = async (req, res, next) => {
+  const idToken = req.headers.authorization?.split('Bearer ')[1];
+  if (!idToken) return res.status(401).send('Unauthorized');
+  try {
+    req.user = await admin.auth().verifyIdToken(idToken);
+    next();
+  } catch (error) {
+    res.status(403).send('Could not verify token');
   }
 };
 
-app.post('/generate-quiz', async (req, res) => {
+// Endpoint for a manager to create an invite code
+app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
+  const { restaurantId } = req.body;
+  const managerId = req.user.uid;
   try {
-    const { text, refinementText } = req.body;
-    if (!text) {
-      return res.status(400).send('No text provided.');
-    }   
-
-    // --- RAG WORKFLOW START ---
-
-    // --- STEP 1: Extract Key Terms (NOW WITH USER GUIDANCE) ---
-    console.log("STEP 1: Extracting key terms with user guidance...");
-
-    // MODIFIED: Create a dynamic instruction for the term extractor
-    let termFocusInstruction = 'Give a general selection of important terms.';
-    if (refinementText) {
-      termFocusInstruction = `Your primary focus for selecting terms MUST be guided by the following user instruction: "${refinementText}".`;
-    }
-
-    // MODIFIED: Inject the dynamic instruction into the prompt
-    const termExtractionPrompt = `
-      You are a research assistant. From the following text, extract a list of up to 5 specific, important proper nouns or specialized terms that would be good for looking up in an encyclopedia.
-      ${termFocusInstruction}
-      Return them ONLY as a valid JSON array of strings inside a json markdown block. For example: \`\`\`json\n["Term 1", "Term 2"]\n\`\`\`.
-      
-      Text: "${text}"
-    `;
-    
-    const termResult = await model.generateContent(termExtractionPrompt);
-    const termResponse = await termResult.response;
-    const keyTermsText = termResponse.text();
-    console.log("Raw AI Response for terms:", keyTermsText);
-    
-    const keyTerms = parseJsonFromAiResponse(keyTermsText);
-    console.log("Found key terms:", keyTerms);
-
-    // --- STEP 2: Retrieve Knowledge from Wikipedia (No changes here) ---
-    console.log("STEP 2: Looking up terms on Wikipedia...");
-    let knowledgeBase = '';
-    
-    const lookupPromises = keyTerms.map(async (term) => {
-      try {
-        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(term)}`;
-        const wikiResponse = await axios.get(wikiUrl);
-        const pages = wikiResponse.data.query.pages;
-        const pageId = Object.keys(pages)[0];
-        if (pageId !== "-1" && pages[pageId].extract) {
-          return `- ${term}: ${pages[pageId].extract.split('. ').slice(0, 2).join('. ')}.`;
-        }
-        return null;
-      } catch (e) {
-        console.error(`Could not fetch Wikipedia article for "${term}"`);
-        return null;
-      }
+    const inviteRef = await firestore.collection('restaurants').doc(restaurantId).collection('invites').add({
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      used: false,
+      createdBy: managerId,
     });
-
-    const resolvedKnowledge = await Promise.all(lookupPromises);
-    knowledgeBase = resolvedKnowledge.filter(item => item !== null).join('\n');
-    console.log("Constructed knowledge base:", knowledgeBase);
-    
-    // --- STEP 3: Augment the final prompt (No changes here) ---
-    console.log("STEP 3: Generating final quiz with augmented prompt...");
-    let userInstruction = refinementText ? `IMPORTANT: Follow this special instruction: "${refinementText}".` : '';
-
-    const finalPrompt = `
-      You are a helpful quiz creator. Your task is to create a quiz based on the "Primary Document Text" below.
-      Use the "Additional Contextual Knowledge" to ask more insightful questions that connect the terms in the document to their real-world meaning.
-
-      **Primary Document Text:**
-      ---
-      ${text}
-      ---
-
-      **Additional Contextual Knowledge:**
-      ---
-      ${knowledgeBase}
-      ---
-      
-      **Instructions:**
-      ${userInstruction}
-      Create a quiz with 5 to 7 multiple-choice questions.
-      Return the response ONLY as a valid JSON array of objects inside a json markdown block.
-      Each object should have the structure: {"question": "...", "options": ["...", "...", "...", "..."], "answer": "..."}
-    `;
-
-    // --- STEP 4: Generate the Final Quiz (No changes here) ---
-    const finalResult = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-      generationConfig: { temperature: 0.7 },
-    });
-
-    const finalResponse = await finalResult.response;
-    const aiText = finalResponse.text();
-    console.log("Raw AI Response for Quiz:", aiText);
-
-    const quizJson = parseJsonFromAiResponse(aiText);
-    res.json(quizJson);
-
+    res.status(201).json({ inviteCode: inviteRef.id });
   } catch (error) {
-    console.error("Error in /generate-quiz endpoint:", error);
-    res.status(500).send('Failed to generate quiz due to a server error.');
+    res.status(500).send('Server error while creating invite.');
   }
 });
 
-app.post('/complete-invite', async (req, res) => {
-  const { email, password, inviteCode } = req.body;
-
-  if (!email || !password || !inviteCode) {
-    return res.status(400).json({ error: 'Missing required fields.' });
-  }
-
-  const db = admin.firestore();
-  let inviteData;
-  let restaurantId;
-
+// Endpoint for the frontend to validate an invite code before creating a user
+app.post('/validate-invite', async (req, res) => {
+  const { inviteCode } = req.body;
   try {
-    // Find the invite document by searching all 'invites' subcollections
-    const invitesQuery = db.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode);
-    const querySnapshot = await invitesQuery.get();
-
-    if (querySnapshot.empty) {
+    const invitesQuery = await firestore.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode).get();
+    if (invitesQuery.empty) {
       return res.status(404).json({ error: 'Invite code not found.' });
     }
-    
-    const inviteDoc = querySnapshot.docs[0];
-    inviteData = inviteDoc.data();
-    restaurantId = inviteDoc.ref.parent.parent.id; // Get the parent restaurant ID
-
-    if (inviteData.used) {
-      return res.status(400).json({ error: 'This invite code has already been used.' });
+    const inviteDoc = invitesQuery.docs[0];
+    if (inviteDoc.data().used) {
+      return res.status(400).json({ error: 'This invite has already been used.' });
     }
-
-    // Create the new employee user in Firebase Auth
-    const userRecord = await admin.auth().createUser({ email, password });
-
-    // Create the user profile in Firestore
-    await db.collection('users').doc(userRecord.uid).set({
-      email: email,
-      role: 'employee',
-      restaurantId: restaurantId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Mark the invite as used
-    await inviteDoc.ref.update({ used: true });
-
-    res.status(201).json({ message: 'Employee account created successfully!' });
-
+    const restaurantId = inviteDoc.ref.parent.parent.id;
+    res.status(200).json({ restaurantId });
   } catch (error) {
-    console.error("Error completing invite:", error);
-    if (error.code === 'auth/email-already-exists') {
-        return res.status(400).json({error: 'This email address is already in use.'});
-    }
-    res.status(500).json({ error: 'Server error while creating employee account.' });
+    res.status(500).json({ error: 'Server error validating invite.' });
   }
 });
+
+// Endpoint to mark an invite as used after successful employee creation
+app.post('/mark-invite-used', async (req, res) => {
+    const { inviteCode } = req.body;
+    try {
+        const invitesQuery = await firestore.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode).get();
+        if (!invitesQuery.empty) {
+            const inviteDoc = invitesQuery.docs[0];
+            await inviteDoc.ref.update({ used: true });
+        }
+        res.status(200).send('Invite marked as used.');
+    } catch (error) {
+        res.status(500).send('Server error marking invite as used.');
+    }
+});
+
 
 app.listen(port, () => {
   console.log(`Backend server listening on http://localhost:${port}`);

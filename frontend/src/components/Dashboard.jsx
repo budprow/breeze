@@ -58,49 +58,49 @@ function Dashboard({ user, userProfile }) {
     }
   };
 
-    const processImage = async (blob) => {
-        const { data: { text } } = await Tesseract.recognize(blob, 'eng', {
-            logger: (m) => {
-                if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 50));
-            },
-        });
-        return text;
-    };
+  const processImage = async (blob) => {
+    const { data: { text } } = await Tesseract.recognize(blob, 'eng', {
+        logger: (m) => {
+            if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 50));
+        },
+    });
+    return text;
+  };
 
-    const processPdf = async (blob) => {
-        const fileReader = new FileReader();
-        fileReader.readAsArrayBuffer(blob);
-        return new Promise((resolve, reject) => {
-            fileReader.onload = async () => {
-                try {
-                    const typedarray = new Uint8Array(fileReader.result);
-                    const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
-                    let fullText = '';
-                    for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        if (textContent.items.length > 0) {
-                            fullText += textContent.items.map((item) => item.str).join(' ');
-                        } else {
-                            const viewport = page.getViewport({ scale: 2 });
-                            const canvas = document.createElement('canvas');
-                            canvas.height = viewport.height;
-                            canvas.width = viewport.width;
-                            const context = canvas.getContext('2d');
-                            await page.render({ canvasContext: context, viewport }).promise;
-                            const preprocessedCanvas = preprocessCanvas(canvas);
-                            const { data: { text } } = await Tesseract.recognize(preprocessedCanvas, 'eng');
-                            fullText += text;
-                        }
+  const processPdf = async (blob) => {
+    const fileReader = new FileReader();
+    fileReader.readAsArrayBuffer(blob);
+    return new Promise((resolve, reject) => {
+        fileReader.onload = async () => {
+            try {
+                const typedarray = new Uint8Array(fileReader.result);
+                const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                let fullText = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    if (textContent.items.length > 0) {
+                        fullText += textContent.items.map((item) => item.str).join(' ');
+                    } else {
+                        const viewport = page.getViewport({ scale: 2 });
+                        const canvas = document.createElement('canvas');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        const context = canvas.getContext('2d');
+                        await page.render({ canvasContext: context, viewport }).promise;
+                        const preprocessedCanvas = preprocessCanvas(canvas);
+                        const { data: { text } } = await Tesseract.recognize(preprocessedCanvas, 'eng');
+                        fullText += text;
                     }
-                    resolve(fullText);
-                } catch (error) {
-                    reject(error);
                 }
-            };
-            fileReader.onerror = (error) => reject(error);
-        });
-    };
+                resolve(fullText);
+            } catch (error) {
+                reject(error);
+            }
+        };
+        fileReader.onerror = (error) => reject(error);
+    });
+  };
 
   const handleGenerateQuiz = async () => {
     if (!selectedDoc) return;
