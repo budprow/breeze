@@ -7,7 +7,7 @@ import {
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import axios from 'axios';
-import './Auth.css';
+import './auth.css';
 
 function Auth() {
   const [email, setEmail] = useState('');
