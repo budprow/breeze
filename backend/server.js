@@ -15,13 +15,23 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 try {
-  const serviceAccount = require('./serviceAccountKey.json');
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-  console.log("Firebase Admin SDK initialized successfully.");
+    const serviceAccount = require('./serviceAccountKey.json');
+    const adminConfig = {
+        credential: admin.credential.cert(serviceAccount)
+    };
+
+    // If the emulator is running, connect the Admin SDK to it
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+        console.log("Connecting to local Firestore emulator...");
+        // No need to set host/ssl here, the SDK detects the env var automatically
+    }
+
+    admin.initializeApp(adminConfig);
+    console.log("Firebase Admin SDK initialized successfully.");
+
 } catch (e) {
-  console.error("FIREBASE ADMIN SDK INITIALIZATION ERROR:", e);
+    console.error("FIREBASE ADMIN SDK INITIALIZATION ERROR:", e);
+    console.error("This can happen if your serviceAccountKey.json is missing or corrupt.");
 }
 
 const firestore = admin.firestore();
@@ -45,7 +55,7 @@ const verifyFirebaseToken = async (req, res, next) => {
 };
 
 // Endpoint for a manager to create an invite code
-app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
+app.all('/create-invite', verifyFirebaseToken, async (req, res) => {
   const { restaurantId } = req.body;
   const managerId = req.user.uid;
   try {
@@ -61,7 +71,7 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
 });
 
 // Endpoint for the frontend to validate an invite code before creating a user
-app.post('/validate-invite', async (req, res) => {
+app.all('/validate-invite', async (req, res) => {
   const { inviteCode } = req.body;
   try {
     const invitesQuery = await firestore.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode).get();
@@ -80,7 +90,7 @@ app.post('/validate-invite', async (req, res) => {
 });
 
 // Endpoint to mark an invite as used after successful employee creation
-app.post('/mark-invite-used', async (req, res) => {
+app.all('/mark-invite-used', async (req, res) => {
     const { inviteCode } = req.body;
     try {
         const invitesQuery = await firestore.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode).get();
