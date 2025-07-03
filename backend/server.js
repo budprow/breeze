@@ -2,51 +2,38 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const axios = require('axios');
 const admin = require('firebase-admin');
 
 const app = express();
 const port = 3001;
 
-app.use(cors());
+// --- UPDATED MIDDLEWARE CONFIGURATION ---
+// This explicit configuration ensures all requests are handled correctly.
+app.use(cors({ origin: true }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+// --- END OF UPDATE ---
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
+// --- Firebase Admin Initialization ---
 try {
   const serviceAccount = require('./serviceAccountKey.json');
-
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
-
-  console.log("Firebase Admin SDK initialized successfully for project:", serviceAccount.project_id);
-
+  console.log("Firebase Admin SDK initialized successfully.");
 } catch (e) {
   console.error("FIREBASE ADMIN SDK INITIALIZATION ERROR:", e);
-  console.error("This can happen if your serviceAccountKey.json is missing or corrupt.");
 }
-
-// This is the most important part of the fix.
-// We get the firestore instance AFTER initialization and explicitly
-// point it to the emulator.
 const firestore = admin.firestore();
-if (process.env.FIRESTORE_EMULATOR_HOST) {
-    console.log(`Connecting to Firestore emulator at: ${process.env.FIRESTORE_EMULATOR_HOST}`);
-    firestore.settings({
-        host: process.env.FIRESTORE_EMULATOR_HOST,
-        ssl: false
-    });
-}
+// --- End of Firebase Admin Initialization ---
 
-const parseJsonFromAiResponse = (rawText) => { /* ... function remains the same ... */ };
 
-app.post('/generate-quiz', async (req, res) => { /* ... function remains the same ... */ });
+// --- ROUTES ---
 
-// --- NEW, SIMPLIFIED INVITE ENDPOINTS ---
+app.post('/generate-quiz', async (req, res) => {
+    // ... your existing quiz generation logic ...
+});
 
-// This middleware verifies the user token for protected routes
 const verifyFirebaseToken = async (req, res, next) => {
   const idToken = req.headers.authorization?.split('Bearer ')[1];
   if (!idToken) return res.status(401).send('Unauthorized');
@@ -58,8 +45,7 @@ const verifyFirebaseToken = async (req, res, next) => {
   }
 };
 
-// Endpoint for a manager to create an invite code
-app.all('/create-invite', verifyFirebaseToken, async (req, res) => {
+app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
   const { restaurantId } = req.body;
   const managerId = req.user.uid;
   try {
@@ -74,8 +60,7 @@ app.all('/create-invite', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// Endpoint for the frontend to validate an invite code before creating a user
-app.all('/validate-invite', async (req, res) => {
+app.post('/validate-invite', async (req, res) => {
   const { inviteCode } = req.body;
   try {
     const invitesQuery = await firestore.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode).get();
@@ -89,12 +74,12 @@ app.all('/validate-invite', async (req, res) => {
     const restaurantId = inviteDoc.ref.parent.parent.id;
     res.status(200).json({ restaurantId });
   } catch (error) {
+    console.error("Error in /validate-invite:", error); // Added more detailed logging
     res.status(500).json({ error: 'Server error validating invite.' });
   }
 });
 
-// Endpoint to mark an invite as used after successful employee creation
-app.all('/mark-invite-used', async (req, res) => {
+app.post('/mark-invite-used', async (req, res) => {
     const { inviteCode } = req.body;
     try {
         const invitesQuery = await firestore.collectionGroup('invites').where(admin.firestore.FieldPath.documentId(), '==', inviteCode).get();
@@ -107,7 +92,6 @@ app.all('/mark-invite-used', async (req, res) => {
         res.status(500).send('Server error marking invite as used.');
     }
 });
-
 
 app.listen(port, () => {
   console.log(`Backend server listening on http://localhost:${port}`);
