@@ -15,26 +15,30 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 try {
-    const serviceAccount = require('./serviceAccountKey.json');
-    const adminConfig = {
-        credential: admin.credential.cert(serviceAccount)
-    };
+  const serviceAccount = require('./serviceAccountKey.json');
 
-    // If the emulator is running, connect the Admin SDK to it
-    if (process.env.FIRESTORE_EMULATOR_HOST) {
-        console.log("Connecting to local Firestore emulator...");
-        // No need to set host/ssl here, the SDK detects the env var automatically
-    }
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
 
-    admin.initializeApp(adminConfig);
-    console.log("Firebase Admin SDK initialized successfully.");
+  console.log("Firebase Admin SDK initialized successfully for project:", serviceAccount.project_id);
 
 } catch (e) {
-    console.error("FIREBASE ADMIN SDK INITIALIZATION ERROR:", e);
-    console.error("This can happen if your serviceAccountKey.json is missing or corrupt.");
+  console.error("FIREBASE ADMIN SDK INITIALIZATION ERROR:", e);
+  console.error("This can happen if your serviceAccountKey.json is missing or corrupt.");
 }
 
+// This is the most important part of the fix.
+// We get the firestore instance AFTER initialization and explicitly
+// point it to the emulator.
 const firestore = admin.firestore();
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+    console.log(`Connecting to Firestore emulator at: ${process.env.FIRESTORE_EMULATOR_HOST}`);
+    firestore.settings({
+        host: process.env.FIRESTORE_EMULATOR_HOST,
+        ssl: false
+    });
+}
 
 const parseJsonFromAiResponse = (rawText) => { /* ... function remains the same ... */ };
 
