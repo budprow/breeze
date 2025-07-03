@@ -5,7 +5,7 @@ import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { auth, db } from './firebase';
 
 import Auth from './components/auth';
-import Dashboard from './components/Dashboard'; // <-- THIS IS THE FIX (Correct capitalization)
+import Dashboard from './components/dashboard'; // <-- THIS IS THE FIX (Correct capitalization)
 import './App.css';
 
 function App() {

@@ -14,10 +14,16 @@ app.use(express.json());
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-const serviceAccount = require('./serviceAccountKey.json');
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+try {
+  const serviceAccount = require('./serviceAccountKey.json');
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  console.log("Firebase Admin SDK initialized successfully.");
+} catch (e) {
+  console.error("FIREBASE ADMIN SDK INITIALIZATION ERROR:", e);
+}
+
 const firestore = admin.firestore();
 
 const parseJsonFromAiResponse = (rawText) => { /* ... function remains the same ... */ };
