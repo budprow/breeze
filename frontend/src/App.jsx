@@ -5,7 +5,8 @@ import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { auth, db } from './firebase';
 
 import Auth from './components/auth';
-import Dashboard from './components/dashboard'; // <-- THIS IS THE FIX (Correct capitalization)
+import Dashboard from './components/dashboard'; 
+import ImageUploader from './ImageUploader'; // <-- Import ImageUploader
 import './App.css';
 
 function App() {
@@ -33,6 +34,17 @@ function App() {
   if (isLoading) {
     return <div className="loading-screen"><h1>Loading...</h1></div>;
   }
+
+  // --- THIS LOGIC DECIDES WHAT TO SHOW THE USER ---
+  const renderContent = () => {
+    if (!user) {
+      return <Auth />;
+    }
+    if (user.isAnonymous) {
+      return <ImageUploader />;
+    }
+    return <Dashboard user={user} userProfile={userProfile} />;
+  };
   
   return (
     <div className="App">
@@ -47,11 +59,7 @@ function App() {
       </header>
       
       <main className="app-container">
-        {user ? (
-          <Dashboard user={user} userProfile={userProfile} />
-        ) : (
-          <Auth />
-        )}
+        {renderContent()}
       </main>
     </div>
   );

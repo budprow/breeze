@@ -14,7 +14,7 @@ function preprocessCanvas(canvas) {
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
     const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-    const contrast = 1.5; 
+    const contrast = 1.5;
     let value = (avg - 128) * contrast + 128;
     if (value > 255) value = 255;
     if (value < 0) value = 0;
@@ -33,7 +33,6 @@ function ImageUploader() {
   const [quizData, setQuizData] = useState(null);
   const [refinement, setRefinement] = useState('');
 
-  // MODIFIED: This function now resets only the quiz, not the document.
   const handleGenerateNewQuiz = () => {
     setQuizData(null);
     setRefinement('');
@@ -133,7 +132,12 @@ function ImageUploader() {
         text: ocrText, 
         refinementText: refinement 
       });
-      setQuizData(response.data);
+      
+      // *** THIS IS THE FIX ***
+      // We are now setting the state with the array of questions,
+      // not the whole response object.
+      setQuizData(response.data.questions);
+
     } catch (error) {
       console.error("Error fetching quiz data:", error);
       alert("Sorry, there was an error creating the quiz.");
@@ -145,7 +149,6 @@ function ImageUploader() {
   return (
     <div className="uploader-container">
       {quizData ? (
-        // MODIFIED: We pass the new handleGenerateNewQuiz function to the Quiz component
         <Quiz quizData={quizData} onGenerateNew={handleGenerateNewQuiz} />
       ) : (
         <>

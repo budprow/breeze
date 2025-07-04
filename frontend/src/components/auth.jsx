@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInAnonymously
+  signInAnonymously // <-- Import this
 } from 'firebase/auth';
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -95,7 +95,16 @@ function Auth() {
     }
   };
 
-  const handleGuestSignIn = async () => { /* ... unchanged ... */ };
+  // --- THIS IS THE NEWLY IMPLEMENTED GUEST SIGN-IN ---
+  const handleGuestSignIn = async () => {
+    setError('');
+    try {
+        await signInAnonymously(auth);
+    } catch (err) {
+        setError('Could not sign in as a guest. Please try again.');
+        console.error("Guest sign-in error:", err);
+    }
+  };
   
   const title = inviteCode ? 'Join Your Team' : (isSignUp ? 'Create Your Restaurant Account' : 'Welcome Back');
   const subtitle = inviteCode ? 'Create an account to accept the invitation.' : (isSignUp ? 'Get started as a manager.' : 'Sign in to continue.');
