@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import './Quiz.css'; // We will create this CSS file next
+import './Quiz.css';
 
 // The Quiz component receives the quiz data and a function to handle restarting
-function Quiz({ quizData, onGenerateNew }) { 
+function Quiz({ quizData, onGenerateNew }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -23,7 +23,8 @@ function Quiz({ quizData, onGenerateNew }) {
       return;
     }
 
-    if (selectedAnswer === currentQuestion.answer) {
+    // *** FIX #1: Use 'correctAnswer' instead of 'answer' ***
+    if (selectedAnswer === currentQuestion.correctAnswer) {
       setScore(prevScore => prevScore + 1);
     }
     setIsAnswered(true);
@@ -49,7 +50,6 @@ function Quiz({ quizData, onGenerateNew }) {
       <div className="quiz-container results-screen">
         <h2>Quiz Complete!</h2>
         <p className="final-score">Your Score: {score} out of {quizData.length}</p>
-        {/* MODIFIED: This button now has new text and calls the new function */}
         <button onClick={onGenerateNew} className="restart-button">Generate New Quiz</button>
       </div>
     );
@@ -70,7 +70,8 @@ function Quiz({ quizData, onGenerateNew }) {
           // Determine the CSS class for the button based on its state
           let buttonClass = 'option-button';
           if (isAnswered) {
-            if (option === currentQuestion.answer) {
+            // *** FIX #2: Use 'correctAnswer' instead of 'answer' ***
+            if (option === currentQuestion.correctAnswer) {
               buttonClass += ' correct'; // Correct answer is always green
             } else if (option === selectedAnswer) {
               buttonClass += ' wrong'; // Selected wrong answer is red
@@ -78,7 +79,7 @@ function Quiz({ quizData, onGenerateNew }) {
           } else if (option === selectedAnswer) {
             buttonClass += ' selected'; // Selected but not yet submitted
           }
-          
+
           return (
             <button key={index} className={buttonClass} onClick={() => handleAnswerSelect(option)} disabled={isAnswered}>
               {option}
@@ -86,7 +87,7 @@ function Quiz({ quizData, onGenerateNew }) {
           );
         })}
       </div>
-      
+
       <div className="quiz-footer">
         {isAnswered ? (
             <button onClick={handleNextQuestion} className="next-button">
