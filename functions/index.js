@@ -18,11 +18,6 @@ const model = genAI.getGenerativeModel({model: "gemini-1.5-flash"});
 
 // --- HELPER FUNCTIONS ---
 
-/**
- * Verifies the user's Firebase Auth token from an incoming request.
- * @param {functions.https.Request} req The request object.
- * @return {Promise<admin.auth.DecodedIdToken|null>} The user's token data or null.
- */
 const getAuthenticatedUser = async (req) => {
   if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer ")) {
     console.error("No authorization header or Bearer scheme found.");
@@ -37,11 +32,6 @@ const getAuthenticatedUser = async (req) => {
   }
 };
 
-/**
- * Parses the JSON block from the AI's raw text response.
- * @param {string} rawText The raw text response from the AI.
- * @return {object|null} The parsed JSON object or null if not found.
- */
 const parseJsonFromAiResponse = (rawText) => {
   const match = rawText.match(/```json\n([\s\S]*?)\n```/);
   if (!match || !match[1]) {
@@ -59,9 +49,6 @@ const parseJsonFromAiResponse = (rawText) => {
 
 // --- INDIVIDUAL, EXPORTED CLOUD FUNCTIONS ---
 
-/**
- * Generates a quiz from the provided text.
- */
 exports.generateQuiz = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
@@ -103,10 +90,6 @@ exports.generateQuiz = functions.https.onRequest((req, res) => {
   });
 });
 
-/**
- * Creates a new, single-use invite code for a restaurant.
- * Requires authentication.
- */
 exports.createInvite = functions.https.onRequest(async (req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
@@ -132,9 +115,6 @@ exports.createInvite = functions.https.onRequest(async (req, res) => {
   });
 });
 
-/**
- * Validates an invite code before a user signs up.
- */
 exports.validateInvite = functions.https.onRequest(async (req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
@@ -145,26 +125,36 @@ exports.validateInvite = functions.https.onRequest(async (req, res) => {
       return res.status(400).json({error: "Invite code is missing."});
     }
     try {
-      const invitesQuery = await firestore.collectionGroup("invites").where(admin.firestore.FieldPath.documentId(), "==", inviteCode).get();
-      if (invitesQuery.empty) {
+      const restaurantsSnapshot = await firestore.collection("restaurants").get();
+      let inviteDoc = null;
+      let restaurantId = null;
+
+      for (const restaurant of restaurantsSnapshot.docs) {
+        const docRef = firestore.collection("restaurants").doc(restaurant.id).collection("invites").doc(inviteCode);
+        const doc = await docRef.get();
+        if (doc.exists) {
+          inviteDoc = doc;
+          restaurantId = restaurant.id;
+          break;
+        }
+      }
+
+      if (!inviteDoc) {
         return res.status(404).json({error: "Invite code not found."});
       }
-      const inviteDoc = invitesQuery.docs[0];
+
       if (inviteDoc.data().used) {
         return res.status(400).json({error: "This invite has already been used."});
       }
-      const restaurantId = inviteDoc.ref.parent.parent.id;
+
       res.status(200).json({restaurantId});
     } catch (error) {
-      console.error("Error validating invite:", error);
+      console.error("Error in /validate-invite:", error);
       res.status(500).json({error: "Server error validating invite."});
     }
   });
 });
 
-/**
- * Marks an invite code as used after successful employee sign-up.
- */
 exports.markInviteUsed = functions.https.onRequest(async (req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
@@ -175,9 +165,20 @@ exports.markInviteUsed = functions.https.onRequest(async (req, res) => {
       return res.status(400).send("Invite code is missing.");
     }
     try {
-      const invitesQuery = await firestore.collectionGroup("invites").where(admin.firestore.FieldPath.documentId(), "==", inviteCode).get();
-      if (!invitesQuery.empty) {
-        await invitesQuery.docs[0].ref.update({used: true});
+      const restaurantsSnapshot = await firestore.collection("restaurants").get();
+      let inviteRef = null;
+
+      for (const restaurant of restaurantsSnapshot.docs) {
+        const docRef = firestore.collection("restaurants").doc(restaurant.id).collection("invites").doc(inviteCode);
+        const doc = await docRef.get();
+        if (doc.exists) {
+          inviteRef = docRef;
+          break;
+        }
+      }
+
+      if (inviteRef) {
+        await inviteRef.update({used: true});
       }
       res.status(200).send("Invite marked as used.");
     } catch (error) {

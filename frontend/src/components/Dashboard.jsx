@@ -120,12 +120,12 @@ function Dashboard({ user, userProfile }) {
         throw new Error("Unsupported file type for quiz generation.");
       }
       setProgress(50);
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const quizResponse = await axios.post(`${apiUrl}/generate-quiz`, {
+      const generateQuizUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/generateQuiz";
+      const quizResponse = await axios.post(generateQuizUrl, {
         text: extractedText,
         refinementText: refinement,
       });
-      setQuizData(quizResponse.data);
+      setQuizData(quizResponse.data.questions);
       setProgress(100);
     } catch (error) {
       console.error("Error generating quiz:", error);

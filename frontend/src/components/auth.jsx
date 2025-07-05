@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInAnonymously // <-- Import this
+  signInAnonymously
 } from 'firebase/auth';
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -30,19 +30,17 @@ function Auth() {
     e.preventDefault();
     setError('');
 
-    // --- SCENARIO 1: EMPLOYEE SIGN-UP (NEW LOGIC) ---
     if (isSignUp && inviteCode) {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-        // Step 1: Ask the backend to validate the invite code first.
-        const validationResponse = await axios.post(`${apiUrl}/validate-invite`, { inviteCode });
+        const validateInviteUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/validateInvite";
+        const markInviteUsedUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/markInviteUsed";
+
+        const validationResponse = await axios.post(validateInviteUrl, { inviteCode });
         const { restaurantId } = validationResponse.data;
 
-        // Step 2: If valid, create the user on the frontend.
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Step 3: Create the employee's user profile document.
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
           role: 'employee',
@@ -50,8 +48,7 @@ function Auth() {
           createdAt: serverTimestamp()
         });
         
-        // Step 4 (Optional but good practice): Mark the invite as used on the backend.
-        await axios.post(`${apiUrl}/mark-invite-used`, { inviteCode });
+        await axios.post(markInviteUsedUrl, { inviteCode });
 
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to create employee account.');
@@ -59,7 +56,6 @@ function Auth() {
       return;
     }
 
-    // --- SCENARIO 2: MANAGER SIGN-UP (UNCHANGED LOGIC) ---
     if (isSignUp) {
       if (!restaurantName) {
         setError("Please enter your restaurant's name.");
@@ -85,7 +81,6 @@ function Auth() {
       return;
     }
     
-    // --- SCENARIO 3: EXISTING USER LOGIN (UNCHANGED LOGIC) ---
     if (!isSignUp) {
         try {
             await signInWithEmailAndPassword(auth, email, password);
@@ -95,7 +90,6 @@ function Auth() {
     }
   };
 
-  // --- THIS IS THE NEWLY IMPLEMENTED GUEST SIGN-IN ---
   const handleGuestSignIn = async () => {
     setError('');
     try {
