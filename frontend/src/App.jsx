@@ -5,7 +5,7 @@ import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { auth, db } from './firebase';
 
 import Auth from './components/auth';
-import Dashboard from './components/dashboard'; 
+import Dashboard from './components/Dashboard'; 
 import ImageUploader from './ImageUploader'; // <-- Import ImageUploader
 import './App.css';
 
