@@ -32,10 +32,9 @@ function Auth() {
 
     if (isSignUp && inviteCode) {
       try {
-        const validateInviteUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/validateInvite";
-        const markInviteUsedUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/markInviteUsed";
+        const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
 
-        const validationResponse = await axios.post(validateInviteUrl, { inviteCode });
+        const validationResponse = await axios.post(`${apiUrl}/validate-invite`, { inviteCode });
         const { restaurantId } = validationResponse.data;
 
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -48,7 +47,7 @@ function Auth() {
           createdAt: serverTimestamp()
         });
         
-        await axios.post(markInviteUsedUrl, { inviteCode });
+        await axios.post(`${apiUrl}/mark-invite-used`, { inviteCode });
 
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to create employee account.');

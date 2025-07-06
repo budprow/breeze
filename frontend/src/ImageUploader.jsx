@@ -127,8 +127,8 @@ function ImageUploader() {
     setIsLoading(true);
     setProgress(0);
     try {
-      const generateQuizUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/generateQuiz";
-      const response = await axios.post(generateQuizUrl, {  
+      const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
+      const response = await axios.post(`${apiUrl}/generate-quiz`, {  
         text: ocrText, 
         refinementText: refinement 
       });
