@@ -17,6 +17,8 @@ function StaffManager({ restaurantId }) {
                 throw new Error("You must be logged in to create an invite.");
             }
 
+            console.log('Current User ID making the request:', user.uid);
+
             // Get the user's Firebase ID token for secure backend authentication
             const idToken = await user.getIdToken();
             
