@@ -20,7 +20,7 @@ function StaffManager({ restaurantId }) {
             // Get the user's Firebase ID token for secure backend authentication
             const idToken = await user.getIdToken();
             
-            const createInviteUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/createInvite"; // <-- Paste your URL here
+            const createInviteUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api/create-invite"; // <-- Paste your URL here
             const response = await axios.post(createInviteUrl, 
                 {
                     restaurantId: restaurantId,
