@@ -20,15 +20,27 @@ function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
   };
 
   const handleUpload = () => {
-    if (!file || !restaurantId) return;
-    
+    // Get the current user at the start of the function
+    const user = auth.currentUser;
+
+    // Add a check to ensure user is logged in
+    if (!file || !restaurantId || !user) {
+      console.error("Upload prerequisites not met: Missing file, restaurantId, or user.");
+      setError("Cannot upload. Please try again.");
+      return;
+    }
+
+    // --- THIS IS THE DEBUG LINE TO ADD ---
+    // It will print the logged-in user's ID to your browser console.
+    console.log('Current User ID making the request:', user.uid);
+
     setIsUploading(true);
     // MODIFIED: The storage path now includes the restaurantId
     const storagePath = `documents/${restaurantId}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
-    uploadTask.on('state_changed', 
+    uploadTask.on('state_changed',
       (snapshot) => { setProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100); },
       (error) => {
         console.error("Upload error:", error);
@@ -43,7 +55,7 @@ function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
             url: downloadURL,
             storagePath: storagePath,
             createdAt: serverTimestamp(),
-            owner: auth.currentUser.uid,
+            owner: auth.currentUser.uid, // This assumes the user object hasn't changed.
           };
           await addDoc(collection(db, "restaurants", restaurantId, "documents"), docData);
           
