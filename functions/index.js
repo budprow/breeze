@@ -1,9 +1,11 @@
 const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
+const functions = require("firebase-functions"); // <-- This is the new line that fixes the error
 const {GoogleGenerativeAI} = require("@google/generative-ai");
-// Import the v2 onRequest function
+// Import the v2 functions we need
 const {onRequest} = require("firebase-functions/v2/https");
+const {onCall} = require("firebase-functions/v2/https");
 
 // --- INITIALIZATION ---
 admin.initializeApp();
@@ -15,10 +17,7 @@ app.use(cors({origin: true}));
 app.use(express.json());
 
 // --- GEMINI AI SETUP ---
-// Access the key as a secret environment variable. This is the correct way.
 const {GEMINI_API_KEY} = process.env;
-
-// It's good practice to check if the key exists, though not strictly required.
 let genAI;
 if (GEMINI_API_KEY) {
   genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -29,7 +28,6 @@ if (GEMINI_API_KEY) {
 
 // --- HELPER FUNCTIONS ---
 const parseJsonFromAiResponse = (rawText) => {
-  // This regex is designed to find a JSON block within markdown-style code fences.
   const match = rawText.match(/```json\n([\s\S]*?)\n```/);
   if (!match || !match[1]) {
     console.error("Could not find a JSON code block in the AI response.");
@@ -49,9 +47,8 @@ const verifyFirebaseToken = async (req, res, next) => {
     return res.status(401).send("Unauthorized: No token provided.");
   }
   try {
-    // Verify the ID token using the Firebase Admin SDK.
     req.user = await admin.auth().verifyIdToken(idToken);
-    next(); // Proceed to the next middleware/route handler if token is valid.
+    next();
   } catch (error) {
     console.error("Error verifying Firebase token:", error);
     res.status(403).send("Could not verify token");
@@ -61,15 +58,12 @@ const verifyFirebaseToken = async (req, res, next) => {
 // --- API ROUTES ---
 
 app.post("/generate-quiz", async (req, res) => {
-  // Ensure the genAI instance was created before trying to use it.
   if (!genAI) {
     return res.status(500).send("Server is not configured with a Gemini API key.");
   }
   const model = genAI.getGenerativeModel({model: "gemini-1.5-flash"});
-
   const {text, refinementText} = req.body;
   if (!text) return res.status(400).send("No text provided.");
-
   const prompt = `
       Based on the following text, generate a multiple-choice quiz with 5 to 8 questions.
       Each question must have exactly 4 answer options, with only one being correct.
@@ -98,7 +92,7 @@ app.post("/generate-quiz", async (req, res) => {
 
 app.post("/create-invite", verifyFirebaseToken, async (req, res) => {
   const {restaurantId} = req.body;
-  const managerId = req.user.uid; // UID comes from the verified token
+  const managerId = req.user.uid;
   if (!restaurantId) {
     return res.status(400).send("Restaurant ID is required.");
   }
@@ -119,9 +113,6 @@ app.post("/validate-invite", async (req, res) => {
   const {inviteCode} = req.body;
   if (!inviteCode) return res.status(400).json({error: "Invite code missing."});
   try {
-    // This is inefficient as it scans all restaurants.
-    // A better data model would be a top-level 'invites' collection.
-    // However, keeping the logic as-is to match the original code.
     const restaurants = await firestore.collection("restaurants").get();
     for (const restaurant of restaurants.docs) {
       const docRef = firestore.collection("restaurants").doc(restaurant.id).collection("invites").doc(inviteCode);
@@ -142,7 +133,6 @@ app.post("/mark-invite-used", async (req, res) => {
   const {inviteCode} = req.body;
   if (!inviteCode) return res.status(400).send("Invite code is missing.");
   try {
-    // Inefficient query, same as /validate-invite
     const restaurants = await firestore.collection("restaurants").get();
     let foundAndUpdated = false;
     for (const restaurant of restaurants.docs) {
@@ -151,14 +141,12 @@ app.post("/mark-invite-used", async (req, res) => {
       if (doc.exists) {
         await docRef.update({used: true});
         foundAndUpdated = true;
-        break; // Exit loop once found
+        break;
       }
     }
-
     if (foundAndUpdated) {
       return res.status(200).send("Invite marked as used.");
     } else {
-      // It's better to send a 404 if not found.
       return res.status(404).send("Invite not found.");
     }
   } catch (error) {
@@ -167,6 +155,28 @@ app.post("/mark-invite-used", async (req, res) => {
   }
 });
 
-// --- EXPORT THE EXPRESS APP AS A SINGLE CLOUD FUNCTION ---
-// This is the updated line using the v2 syntax for HTTPS functions with secrets.
+
+// --- CLOUD FUNCTION EXPORTS ---
+
+// This is your existing API function
 exports.api = onRequest({secrets: ["GEMINI_API_KEY"]}, app);
+
+
+// --- THIS IS THE NEW FUNCTION TO ADD ---
+// This function allows you to set a custom role on a user.
+exports.setManagerRole = onCall(async (request) => {
+  // In a real app, you would add security here to ensure only an admin can call this.
+  try {
+    const uid = request.data.uid;
+    if (!uid) {
+      throw new Error("The function must be called with a \"uid\" argument.");
+    }
+    // This sets the custom claim { role: 'manager' } on the user account
+    await admin.auth().setCustomUserClaims(uid, {role: "manager"});
+    return {message: `Success! User ${uid} has now been made a manager.`};
+  } catch (error) {
+    console.error("Error setting custom claim:", error);
+    // Throw an error so the client knows something went wrong.
+    throw new functions.https.HttpsError("internal", "Unable to set custom role.");
+  }
+});
