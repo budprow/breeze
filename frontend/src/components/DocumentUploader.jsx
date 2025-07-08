@@ -71,11 +71,7 @@ function DocumentUploader({ restaurantId }) {
 
   return (
     <div className="uploader-card">
-        {/* --- VISUAL TESTS --- */}
-        <h1 style={{color: 'red'}}>IS THIS COMPONENT VISIBLE?</h1>
-        <h2 style={{color: 'blue'}}>Current User ID: {user ? user.uid : "No User Is Logged In"}</h2>
-
-
+ 
         <input type="file" id="documentUpload" onChange={handleFileChange} style={{display: 'none'}} />
         <label htmlFor="documentUpload" className="upload-label">
             {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
