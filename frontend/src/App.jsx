@@ -5,8 +5,8 @@ import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { auth, db } from './firebase';
 
 import Auth from './components/auth';
-import Dashboard from './components/Dashboard'; 
-import ImageUploader from './ImageUploader'; // <-- Import ImageUploader
+import Dashboard from './components/Dashboard';
+import ImageUploader from './ImageUploader';
 import './App.css';
 
 function App() {
@@ -35,7 +35,6 @@ function App() {
     return <div className="loading-screen"><h1>Loading...</h1></div>;
   }
 
-  // --- THIS LOGIC DECIDES WHAT TO SHOW THE USER ---
   const renderContent = () => {
     if (!user) {
       return <Auth />;
@@ -45,11 +44,11 @@ function App() {
     }
     return <Dashboard user={user} userProfile={userProfile} />;
   };
-  
+
   return (
     <div className="App">
       <header className="app-header">
-        <h1>AI Training Assistant</h1>
+        <h1>Study Buddy</h1>
         {user && (
           <div className="user-info">
             <span>{user.isAnonymous ? 'Guest' : user.email}</span>
