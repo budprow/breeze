@@ -1,15 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, db, auth } from '../firebase';
 import { v4 as uuidv4 } from 'uuid';
 import './DocumentUploader.css';
 
-function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
+function DocumentUploader({ restaurantId }) {
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Create a state to hold the user, which updates when auth state changes
+  const [user, setUser] = useState(auth.currentUser);
+
+  // Listen for changes in authentication state
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
+    });
+    return unsubscribe; // Cleanup subscription on component unmount
+  }, []);
+
 
   const handleFileChange = (e) => {
       const selectedFile = e.target.files[0];
@@ -20,32 +32,12 @@ function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
   };
 
   const handleUpload = () => {
-    console.log("--- Starting Upload Process ---");
-    
-    // Get all the variables we need to check
-    const user = auth.currentUser;
-    const currentFile = file;
-    const currentRestaurantId = restaurantId;
-
-    // Log the status of each variable
-    console.log("Checking prerequisites...");
-    console.log("1. Does a file exist?", !!currentFile);
-    console.log("2. Does a restaurantId exist?", !!currentRestaurantId, "(Value: ", currentRestaurantId, ")");
-    console.log("3. Is a user logged in?", !!user);
-
-    // If a user exists, log their ID
-    if (user) {
-      console.log("   - User ID is:", user.uid);
-    }
-    
-    // Original check to stop the function if something is missing
-    if (!currentFile || !currentRestaurantId || !user) {
-      console.error("Upload stopped because a prerequisite is missing.");
+    // Check for all required values
+    if (!file || !restaurantId || !user) {
       setError("Cannot upload. A required value is missing.");
       return;
     }
 
-    // --- Original Upload Logic (no changes needed below) ---
     setIsUploading(true);
     const storagePath = `documents/${restaurantId}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
@@ -65,7 +57,7 @@ function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
             url: downloadURL,
             storagePath: storagePath,
             createdAt: serverTimestamp(),
-            owner: auth.currentUser.uid,
+            owner: user.uid,
           };
           await addDoc(collection(db, "restaurants", restaurantId, "documents"), docData);
           
@@ -79,7 +71,11 @@ function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
 
   return (
     <div className="uploader-card">
+        {/* --- VISUAL TESTS --- */}
         <h1 style={{color: 'red'}}>IS THIS COMPONENT VISIBLE?</h1>
+        <h2 style={{color: 'blue'}}>Current User ID: {user ? user.uid : "No User Is Logged In"}</h2>
+
+
         <input type="file" id="documentUpload" onChange={handleFileChange} style={{display: 'none'}} />
         <label htmlFor="documentUpload" className="upload-label">
             {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
