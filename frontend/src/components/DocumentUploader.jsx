@@ -79,6 +79,7 @@ function DocumentUploader({ restaurantId }) { // Receive restaurantId as a prop
 
   return (
     <div className="uploader-card">
+        <h1 style={{color: 'red'}}>IS THIS COMPONENT VISIBLE?</h1>
         <input type="file" id="documentUpload" onChange={handleFileChange} style={{display: 'none'}} />
         <label htmlFor="documentUpload" className="upload-label">
             {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
