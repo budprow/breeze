@@ -5,7 +5,7 @@ import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { auth, db } from './firebase';
 
 import Auth from './components/auth';
-import Dashboard from './components/Dashboard';
+import Dashboard from './components/Dashboard'; 
 import ImageUploader from './ImageUploader';
 import './App.css';
 
@@ -44,7 +44,7 @@ function App() {
     }
     return <Dashboard user={user} userProfile={userProfile} />;
   };
-
+  
   return (
     <div className="App">
       <header className="app-header">

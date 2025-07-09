@@ -30,19 +30,20 @@ function Auth() {
     e.preventDefault();
     setError('');
 
+    // Handle invited user sign-up
     if (isSignUp && inviteCode) {
       try {
         const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
-
         const validationResponse = await axios.post(`${apiUrl}/validate-invite`, { inviteCode });
         const { restaurantId } = validationResponse.data;
 
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
+        // Assign the 'user' role
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
-          role: 'employee',
+          role: 'user', // <-- Changed from 'employee'
           restaurantId: restaurantId,
           createdAt: serverTimestamp()
         });
@@ -50,14 +51,15 @@ function Auth() {
         await axios.post(`${apiUrl}/mark-invite-used`, { inviteCode });
 
       } catch (err) {
-        setError(err.response?.data?.error || 'Failed to create employee account.');
+        setError(err.response?.data?.error || 'Failed to create user account.');
       }
       return;
     }
 
+    // Handle new administrator sign-up
     if (isSignUp) {
       if (!restaurantName) {
-        setError("Please enter your restaurant's name.");
+        setError("Please enter your organization's name.");
         return;
       }
       try {
@@ -68,9 +70,10 @@ function Auth() {
           ownerId: user.uid,
           createdAt: serverTimestamp()
         });
+        // Assign the 'administrator' role
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
-          role: 'manager',
+          role: 'administrator', // <-- Changed from 'manager'
           restaurantId: restaurantRef.id,
           createdAt: serverTimestamp()
         });
@@ -80,6 +83,7 @@ function Auth() {
       return;
     }
     
+    // Handle standard sign-in
     if (!isSignUp) {
         try {
             await signInWithEmailAndPassword(auth, email, password);
@@ -99,9 +103,9 @@ function Auth() {
     }
   };
   
-  const title = inviteCode ? 'Join Your Team' : (isSignUp ? 'Create Your Restaurant Account' : 'Welcome Back');
-  const subtitle = inviteCode ? 'Create an account to accept the invitation.' : (isSignUp ? 'Get started as a manager.' : 'Sign in to continue.');
-  const emailLabel = inviteCode ? 'Your Email' : (isSignUp ? "Manager's Email" : "Email");
+  const title = inviteCode ? 'Join Your Team' : (isSignUp ? 'Create Your Account' : 'Welcome Back');
+  const subtitle = inviteCode ? 'Create an account to accept the invitation.' : (isSignUp ? 'Get started as an administrator.' : 'Sign in to continue.');
+  const emailLabel = inviteCode ? 'Your Email' : (isSignUp ? "Administrator's Email" : "Email");
 
   return (
     <div className="auth-container">
@@ -111,7 +115,7 @@ function Auth() {
         <form onSubmit={handleAuthAction}>
           {isSignUp && !inviteCode && (
             <div className="input-group">
-              <label htmlFor="restaurantName">Restaurant Name</label>
+              <label htmlFor="restaurantName">Organization Name</label>
               <input type="text" id="restaurantName" value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} required />
             </div>
           )}

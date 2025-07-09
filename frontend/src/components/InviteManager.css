@@ -1,10 +1,10 @@
-.staff-manager-container {
+.invite-manager-container { /* <-- Updated class name */
     margin-top: 40px;
     padding-top: 20px;
     border-top: 1px solid #eee;
 }
 
-.staff-manager-container h4 {
+.invite-manager-container h4 {
     margin-bottom: 10px;
 }
 

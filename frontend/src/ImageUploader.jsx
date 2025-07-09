@@ -14,7 +14,7 @@ function preprocessCanvas(canvas) {
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const contrast = 1.5;
+        const contrast = 1.5; 
         let value = (avg - 128) * contrast + 128;
         if (value > 255) value = 255;
         if (value < 0) value = 0;
@@ -54,6 +54,8 @@ function ImageUploader() {
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
                 let extractedText = '';
+                setProgress(Math.round(((i + 1) / selectedFiles.length) * 50)); // Progress up to 50%
+                
                 if (file.type.startsWith('image/')) {
                     extractedText = await processImage(file);
                 } else if (file.type === 'application/pdf') {
@@ -62,6 +64,7 @@ function ImageUploader() {
                 combinedText += extractedText + '\n\n';
             }
             setOcrText(combinedText);
+            setProgress(100);
         } catch (error) {
             console.error("An error occurred during file processing:", error);
             alert("Sorry, something went wrong during processing.");
@@ -69,13 +72,9 @@ function ImageUploader() {
             setIsLoading(false);
         }
     };
-
+    
     const processImage = async (file) => {
-        const { data: { text } } = await Tesseract.recognize(file, 'eng', {
-            logger: (m) => {
-                if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 100));
-            },
-        });
+        const { data: { text } } = await Tesseract.recognize(file, 'eng');
         return text;
     };
 
@@ -88,22 +87,9 @@ function ImageUploader() {
                     const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
                     let fullText = '';
                     for (let i = 1; i <= pdf.numPages; i++) {
-                        setProgress(Math.round((i / pdf.numPages) * 100));
                         const page = await pdf.getPage(i);
                         const textContent = await page.getTextContent();
-                        if (textContent.items.length > 0) {
-                            fullText += textContent.items.map((item) => item.str).join(' ');
-                        } else {
-                            const viewport = page.getViewport({ scale: 2 });
-                            const canvas = document.createElement('canvas');
-                            canvas.height = viewport.height;
-                            canvas.width = viewport.width;
-                            const context = canvas.getContext('2d');
-                            await page.render({ canvasContext: context, viewport }).promise;
-                            const preprocessedCanvas = preprocessCanvas(canvas);
-                            const { data: { text } } = await Tesseract.recognize(preprocessedCanvas, 'eng');
-                            fullText += text;
-                        }
+                        fullText += textContent.items.map((item) => item.str).join(' ');
                     }
                     resolve(fullText);
                 } catch (error) {
@@ -136,45 +122,43 @@ function ImageUploader() {
             setIsLoading(false);
         }
     };
-
+    
     const handleGenerateNewQuiz = () => {
-        // --- THIS IS THE KEY CHANGE ---
-        // We only reset the quiz data and refinement text.
-        // The selected files and extracted OCR text will remain.
         setQuizData(null);
         setRefinement('');
     };
-
+    
     if (quizData) {
         return <Quiz quizData={quizData} onGenerateNew={handleGenerateNewQuiz} />;
     }
+
+    const fileInputLabel = selectedFiles.length > 0 
+        ? `${selectedFiles.length} file(s) selected. Change?` 
+        : 'Select Documents or Take Photo(s)';
 
     return (
         <div className="uploader-container">
             <div className="explanation-box">
                 <h2>Your Personal Study Sidekick</h2>
-                <p>Upload documents, lecture notes, or even take photos of book pages. We'll turn them into an interactive quiz to help you learn faster.</p>
+                <p>Turn any document, textbook page, or lecture note into an interactive quiz. Use the instructions box to guide the AI, helping you focus on what's most important.</p>
             </div>
 
-            {/* Step 1 is now persistent unless files are changed */}
             <div className="upload-step">
-                 <h3>Step 1: Your Materials</h3>
-                {selectedFiles.length === 0 ? (
-                    <>
-                        <input
-                            type="file"
-                            id="fileInput"
-                            multiple
-                            accept="image/*,application/pdf"
-                            onChange={handleFileChange}
-                            className="uploader-input"
-                        />
-                        <label htmlFor="fileInput" className="uploader-label">
-                            Select Documents or Take Photo
-                        </label>
-                    </>
-                ) : (
-                     <div className="file-list-container">
+                <h3>Step 1: Upload Your Materials</h3>
+                <input
+                    type="file"
+                    id="fileInput"
+                    multiple
+                    accept="image/*,application/pdf"
+                    onChange={handleFileChange}
+                    className="uploader-input"
+                />
+                <label htmlFor="fileInput" className="uploader-label">
+                    {fileInputLabel}
+                </label>
+
+                {selectedFiles.length > 0 && (
+                    <div className="file-list-container">
                         <input
                             type="text"
                             className="group-name-input"
@@ -190,18 +174,16 @@ function ImageUploader() {
                     </div>
                 )}
             </div>
-
-            {/* Step 2 will only show if we have files but no text */}
+            
             {selectedFiles.length > 0 && !ocrText && (
                 <div className="upload-step">
                     <h3>Step 2: Extract Text</h3>
                     <button onClick={handleExtractText} className="process-button" disabled={isLoading}>
-                        {isLoading ? `Reading... ${progress}%` : 'Extract Text from Documents'}
+                        {isLoading ? `Reading... ${progress}%` : 'Extract Text from Document(s)'}
                     </button>
                 </div>
             )}
             
-            {/* Step 3 will show as long as we have extracted text */}
             {ocrText && (
                  <div className="upload-step">
                     <h3>Step 3: Generate Your Quiz</h3>

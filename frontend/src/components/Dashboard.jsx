@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, doc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { useCollection, useCollectionData } from 'react-firebase-hooks/firestore';
+import { collection, query, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
 import Quiz from '../Quiz';
-import axios from 'axios';
+import api from '../api'; // <-- Using the new centralized api object
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
-import StaffManager from './StaffManager';
+import InviteManager from './InviteManager';
 import './Dashboard.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
@@ -30,19 +30,20 @@ function preprocessCanvas(canvas) {
     return canvas;
 }
 
+// The full Dashboard component
 function Dashboard({ user, userProfile }) {
   const restaurantId = userProfile?.restaurantId;
-  const isGuest = user.isAnonymous;
-
   const [docsValue, docsLoading, docsError] = useCollection(
     restaurantId ? query(collection(db, 'restaurants', restaurantId, 'documents')) : null
   );
 
+  const [view, setView] = useState('dashboard');
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [refinement, setRefinement] = useState('');
   const [quizData, setQuizData] = useState(null);
+  const [scores, setScores] = useState([]);
 
   const handleDelete = async (documentToDelete) => {
     if (!restaurantId) return;
@@ -103,44 +104,49 @@ function Dashboard({ user, userProfile }) {
   };
 
   const handleGenerateQuiz = async () => {
-    if (!selectedDoc) return;
+    if (!selectedDoc || !user) return;
     setIsLoading(true);
     setProgress(0);
     try {
       const docUrl = selectedDoc.data().url;
+      // axios doesn't need the api interceptor for public URLs
       const response = await axios.get(docUrl, { responseType: 'blob' });
       const fileBlob = response.data;
-      const fileType = fileBlob.type;
       let extractedText = '';
-      if (fileType.startsWith('image/')) {
+
+      if (fileBlob.type.startsWith('image/')) {
         extractedText = await processImage(fileBlob);
-      } else if (fileType === 'application/pdf') {
+      } else if (fileBlob.type === 'application/pdf') {
         extractedText = await processPdf(fileBlob);
       } else {
         throw new Error("Unsupported file type for quiz generation.");
       }
+      
       setProgress(50);
-      const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
-      const quizResponse = await axios.post(`${apiUrl}/generate-quiz`, {
+      
+      // Use the centralized api object to call our backend
+      const quizResponse = await api.post('/generate-quiz', {
         text: extractedText,
         refinementText: refinement,
       });
+
       setQuizData(quizResponse.data.questions);
       setProgress(100);
+
     } catch (error) {
-      console.error("Error generating quiz:", error);
+      console.error("Error during quiz generation:", error);
       alert("Sorry, there was an error generating the quiz.");
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   const handleBackToDashboard = () => {
     setSelectedDoc(null);
     setQuizData(null);
     setRefinement('');
   };
-  
+
   if (quizData) {
     return <Quiz quizData={quizData} onGenerateNew={handleBackToDashboard} />;
   }
@@ -178,19 +184,13 @@ function Dashboard({ user, userProfile }) {
     <div className="dashboard-container">
       <div className="dashboard-section">
         <h3>My Training Documents</h3>
-        {isGuest ? (
-          <p className="guest-message">Sign up for a full account to upload and save your own documents!</p>
-        ) : userProfile?.role === 'manager' ? (
+        {userProfile?.role === 'administrator' && (
           <DocumentUploader restaurantId={restaurantId} />
-        ) : (
-          <p>Your assigned training documents will appear here.</p>
         )}
         <div className="document-list">
           {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
           {docsLoading && <span>Loading documents...</span>}
-          {isGuest ? (
-            <p className="no-documents">This is where your uploaded documents would appear. Sign up to save your work!</p>
-          ) : docsValue && (
+          {docsValue && (
             <ul>
               {docsValue.docs.map((doc) => (
                 <li key={doc.id} className="document-item">
@@ -199,7 +199,7 @@ function Dashboard({ user, userProfile }) {
                       <button onClick={() => setSelectedDoc(doc)} className="action-btn generate-btn">
                           Generate Quiz
                       </button>
-                      {userProfile?.role === 'manager' && (
+                      {userProfile?.role === 'administrator' && (
                           <button onClick={() => handleDelete(doc)} className="action-btn delete-btn">
                               Delete
                           </button>
@@ -215,9 +215,9 @@ function Dashboard({ user, userProfile }) {
         </div>
       </div>
 
-      {userProfile?.role === 'manager' && (
+      {userProfile?.role === 'administrator' && (
         <div className="dashboard-section">
-          <StaffManager restaurantId={restaurantId} />
+          <InviteManager restaurantId={restaurantId} />
         </div>
       )}
     </div>

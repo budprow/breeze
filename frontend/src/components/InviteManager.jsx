@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { auth } from '../firebase'; // Import auth to get the current user
-import './StaffManager.css';
+import api from '../api';
+import './InviteManager.css';
 
-function StaffManager({ restaurantId }) {
+function InviteManager({ restaurantId }) {
     const [inviteLink, setInviteLink] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -12,26 +11,9 @@ function StaffManager({ restaurantId }) {
         setIsLoading(true);
         setError('');
         try {
-            const user = auth.currentUser;
-            if (!user) {
-                throw new Error("You must be logged in to create an invite.");
-            }
-
-            // Get the user's Firebase ID token for secure backend authentication
-            const idToken = await user.getIdToken();
-            
-            const createInviteUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api/create-invite"; // <-- Paste your URL here
-            const response = await axios.post(createInviteUrl, 
-                {
-                    restaurantId: restaurantId,
-                    managerId: user.uid
-                }, 
-                {
-                    headers: {
-                        'Authorization': `Bearer ${idToken}`
-                    }
-                }
-            );
+            const response = await api.post('/create-invite', {
+                restaurantId: restaurantId,
+            });
 
             const { inviteCode } = response.data;
             const baseUrl = window.location.origin;
@@ -56,19 +38,16 @@ function StaffManager({ restaurantId }) {
     };
 
     return (
-        <div className="staff-manager-container">
-            <h4>Invite New Staff</h4>
-            <p>Generate a unique sign-up link to share with your new employees.</p>
-            
+        <div className="invite-manager-container">
+            <h4>Invite New User</h4>
+            <p>Generate a unique sign-up link to share with new users.</p>
             <button onClick={generateInviteLink} disabled={isLoading} className="generate-invite-btn">
                 {isLoading ? 'Generating...' : 'Generate Invite Link'}
             </button>
-
             {error && <p className="error-message">{error}</p>}
-
             {inviteLink && (
                 <div className="invite-link-container">
-                    <p>Share this link with your new staff member:</p>
+                    <p>Share this link with your new user:</p>
                     <div className="invite-link-box">
                         <input type="text" value={inviteLink} readOnly />
                         <button onClick={copyToClipboard}>Copy</button>
@@ -79,4 +58,4 @@ function StaffManager({ restaurantId }) {
     );
 }
 
-export default StaffManager;
+export default InviteManager;
