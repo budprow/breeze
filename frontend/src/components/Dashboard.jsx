@@ -5,7 +5,8 @@ import { ref, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
 import Quiz from '../Quiz';
-import api from '../api'; // <-- Using the new centralized api object
+import api from '../api';
+import axios from 'axios'; // <-- THIS IS THE FIX
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
@@ -30,7 +31,6 @@ function preprocessCanvas(canvas) {
     return canvas;
 }
 
-// The full Dashboard component
 function Dashboard({ user, userProfile }) {
   const restaurantId = userProfile?.restaurantId;
   const [docsValue, docsLoading, docsError] = useCollection(
@@ -109,7 +109,6 @@ function Dashboard({ user, userProfile }) {
     setProgress(0);
     try {
       const docUrl = selectedDoc.data().url;
-      // axios doesn't need the api interceptor for public URLs
       const response = await axios.get(docUrl, { responseType: 'blob' });
       const fileBlob = response.data;
       let extractedText = '';
@@ -124,7 +123,6 @@ function Dashboard({ user, userProfile }) {
       
       setProgress(50);
       
-      // Use the centralized api object to call our backend
       const quizResponse = await api.post('/generate-quiz', {
         text: extractedText,
         refinementText: refinement,
@@ -146,7 +144,7 @@ function Dashboard({ user, userProfile }) {
     setQuizData(null);
     setRefinement('');
   };
-
+  
   if (quizData) {
     return <Quiz quizData={quizData} onGenerateNew={handleBackToDashboard} />;
   }

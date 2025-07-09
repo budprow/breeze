@@ -9,7 +9,7 @@ const quizGenerator = require("./services/quizGenerator");
 
 // --- INITIALIZATION ---
 admin.initializeApp();
-const firestore = admin.firestore(); // We will use this 'firestore' variable
+const firestore = admin.firestore();
 const app = express();
 
 // --- MIDDLEWARE ---
@@ -80,7 +80,7 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
         .add({
           ...quizData,
           name: groupName || "Untitled Quiz",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(), // This one is also correct as it's a different context
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
           createdBy: uid,
           assignedTo: [],
         });
@@ -128,7 +128,7 @@ app.post("/create-invite", verifyFirebaseToken, async (req, res) => {
   try {
     const inviteRef = await firestore.collection("restaurants").doc(restaurantId).collection("invites").add({
       // --- THIS IS THE FIX ---
-      createdAt: firestore.FieldValue.serverTimestamp(), // Use the firestore instance
+      createdAt: admin.firestore.FieldValue.serverTimestamp(), // Corrected from the previous error
       used: false,
       createdBy: managerId,
     });
