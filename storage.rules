@@ -2,12 +2,18 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Only allow users to access files within their own restaurant's folder.
+    
+    // This rule applies to files inside the 'documents' folder
     match /documents/{restaurantId}/{allPaths=**} {
+    
+      // This function checks if the logged-in user's document in Firestore
+      // has a restaurantId that matches the one in the upload path.
       function isMember() {
-        return request.auth != null && request.auth.token.restaurantId == restaurantId;
+        return request.auth != null && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
       }
-      // Anyone who is a member of the restaurant can upload.
+
+      // Allow reads and writes only if the user is a member of the organization.
       allow read, write: if isMember();
     }
   }
