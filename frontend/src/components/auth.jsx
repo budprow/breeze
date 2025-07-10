@@ -6,7 +6,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import axios from 'axios';
+import api from '../api'; // Use the centralized API
 import './auth.css';
 
 function Auth() {
@@ -33,22 +33,23 @@ function Auth() {
     // Handle invited user sign-up
     if (isSignUp && inviteCode) {
       try {
-        const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
-        const validationResponse = await axios.post(`${apiUrl}/validate-invite`, { inviteCode });
-        const { restaurantId } = validationResponse.data;
-
+        // First, create the user in Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Assign the 'user' role
+        // Then, validate the invite and create their profile
+        const validationResponse = await api.post('/validate-invite', { inviteCode });
+        const { restaurantId } = validationResponse.data;
+
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
-          role: 'user', // <-- Changed from 'employee'
+          role: 'user',
           restaurantId: restaurantId,
           createdAt: serverTimestamp()
         });
         
-        await axios.post(`${apiUrl}/mark-invite-used`, { inviteCode });
+        // Finally, mark the invite as used
+        await api.post('/mark-invite-used', { inviteCode });
 
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to create user account.');
@@ -70,10 +71,9 @@ function Auth() {
           ownerId: user.uid,
           createdAt: serverTimestamp()
         });
-        // Assign the 'administrator' role
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
-          role: 'administrator', // <-- Changed from 'manager'
+          role: 'administrator',
           restaurantId: restaurantRef.id,
           createdAt: serverTimestamp()
         });
