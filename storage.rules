@@ -2,9 +2,13 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      // Allow read and write access only if the user is authenticated
-      allow read, write: if request.auth != null;
+    // Only allow users to access files within their own restaurant's folder.
+    match /documents/{restaurantId}/{allPaths=**} {
+      function isMember() {
+        return request.auth != null && request.auth.token.restaurantId == restaurantId;
+      }
+      // Anyone who is a member of the restaurant can upload.
+      allow read, write: if isMember();
     }
   }
 }
