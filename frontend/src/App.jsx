@@ -18,7 +18,13 @@ function App() {
   );
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => { // <-- Made this async
+      if (currentUser) {
+        // --- THIS IS THE FIX ---
+        // Force a refresh of the ID token to get the latest custom claims.
+        // This is crucial after setting a new role for the user.
+        await currentUser.getIdToken(true);
+      }
       setUser(currentUser);
       setAuthLoading(false);
     });
