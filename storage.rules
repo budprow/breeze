@@ -2,19 +2,11 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // This rule applies to files inside the 'documents' folder
-    match /documents/{restaurantId}/{allPaths=**} {
-    
-      // This function checks if the logged-in user's document in Firestore
-      // has a restaurantId that matches the one in the upload path.
-      function isMember() {
-        return request.auth != null && 
-               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
-      }
-
-      // Allow reads and writes only if the user is a member of the organization.
-      allow read, write: if isMember();
+    // TEMPORARY DEBUGGING RULE:
+    // This rule ignores the folder structure and simply checks
+    // if the user is logged in.
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
