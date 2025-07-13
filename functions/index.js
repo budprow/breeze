@@ -133,12 +133,18 @@ exports.api = onRequest({secrets: ["GEMINI_API_KEY"]}, app);
 
 exports.setManagerRole = onCall(async (request) => {
   try {
-    const uid = request.data.uid;
-    if (!uid) {
-      throw new Error("The function must be called with a \"uid\" argument.");
+    const {uid, restaurantId} = request.data; // Get both uid and restaurantId
+    if (!uid || !restaurantId) {
+      throw new Error("The function must be called with \"uid\" and \"restaurantId\" arguments.");
     }
-    await admin.auth().setCustomUserClaims(uid, {role: "administrator"});
-    return {message: `Success! User ${uid} has now been made an administrator.`};
+
+    // Set both the role and restaurantId as custom claims on the user's token
+    await admin.auth().setCustomUserClaims(uid, {
+      role: "administrator",
+      restaurantId: restaurantId,
+    });
+
+    return {message: `Success! User ${uid} has now been made an administrator for restaurant ${restaurantId}.`};
   } catch (error) {
     console.error("Error setting custom claim:", error);
     throw new functions.https.HttpsError("internal", "Unable to set custom role.");

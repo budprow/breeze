@@ -2,11 +2,14 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // TEMPORARY DEBUGGING RULE:
-    // This rule ignores the folder structure and simply checks
-    // if the user is logged in.
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    
+    // This rule applies to files inside the 'documents' folder
+    match /documents/{restaurantId}/{allPaths=**} {
+    
+      // This rule checks if the user's authentication token has a custom
+      // claim for 'restaurantId' that matches the folder they are trying
+      // to access. This is set by your 'setManagerRole' function.
+      allow read, write: if request.auth.token.restaurantId == restaurantId;
     }
   }
 }
