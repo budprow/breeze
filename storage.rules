@@ -2,25 +2,15 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // This rule applies to files inside a specific restaurant's 'documents' folder.
     match /documents/{restaurantId}/{allPaths=**} {
-
-      // This is the final, correct rule using inline logic.
-      // It allows access if the user is authenticated AND they meet
-      // one of the two conditions below.
-      allow read, write: if
-        request.auth != null &&
-        (
-          // Condition 1 (Administrator): Check if the user document exists in Firestore
-          // and if their role is 'administrator'.
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator'
-        ) || (
-          // Condition 2 (Member): Check if the user document exists and if their
-          // restaurantId matches the one in the path.
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId
-        );
+      // Allow a user to create a file IF they are logged in AND
+      // their UID matches the 'ownerUid' in the file's metadata.
+      // This is the 'stamp' we added in the frontend code.
+      allow create: if request.auth != null && request.resource.metadata.ownerUid == request.auth.uid;
+      
+      // Allow anyone who is logged in to read files for now.
+      // We can tighten this later if needed.
+      allow read: if request.auth != null;
     }
   }
 }

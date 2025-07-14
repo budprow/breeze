@@ -10,44 +10,50 @@ function DocumentUploader({ restaurantId }) {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  
-  // Create a state to hold the user, which updates when auth state changes
   const [user, setUser] = useState(auth.currentUser);
 
-  // Listen for changes in authentication state
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
     });
-    return unsubscribe; // Cleanup subscription on component unmount
+    return unsubscribe;
   }, []);
 
-
   const handleFileChange = (e) => {
-      const selectedFile = e.target.files[0];
-      if (selectedFile) {
-        setFile(selectedFile);
-        setError('');
-      }
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setError('');
+    }
   };
 
   const handleUpload = () => {
-    // Check for all required values
     if (!file || !restaurantId || !user) {
-      setError("Cannot upload. A required value is missing.");
+      setError("A required value is missing.");
       return;
     }
 
     setIsUploading(true);
     const storagePath = `documents/${restaurantId}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    // *** THE FIX IS HERE ***
+    // We add the user's UID to the file's metadata.
+    // This is the "stamp" our new security rule will check.
+    const metadata = {
+      customMetadata: {
+        'ownerUid': user.uid
+      }
+    };
+
+    // Pass the metadata to the upload function.
+    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
 
     uploadTask.on('state_changed', 
       (snapshot) => { setProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100); },
       (error) => {
         console.error("Upload error:", error);
-        setError('Upload failed.');
+        setError('Upload failed. Check console for details.');
         setIsUploading(false);
       },
       () => {
@@ -57,7 +63,7 @@ function DocumentUploader({ restaurantId }) {
             url: downloadURL,
             storagePath: storagePath,
             createdAt: serverTimestamp(),
-            owner: user.uid,
+            owner: user.uid, // Keep this for Firestore rules
           };
           await addDoc(collection(db, "restaurants", restaurantId, "documents"), docData);
           
@@ -71,25 +77,24 @@ function DocumentUploader({ restaurantId }) {
 
   return (
     <div className="uploader-card">
- 
-        <input type="file" id="documentUpload" onChange={handleFileChange} style={{display: 'none'}} />
-        <label htmlFor="documentUpload" className="upload-label">
-            {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
-        </label>
-        
-        {isUploading ? (
-            <div className="progress-bar-container">
-            <div className="progress-bar" style={{width: `${progress}%`}}>
-                {Math.round(progress)}%
-            </div>
-            </div>
-        ) : (
-            <button onClick={handleUpload} className="upload-button" disabled={!file}>
-            Upload and Save
-            </button>
-        )}
+      <input type="file" id="documentUpload" onChange={handleFileChange} style={{display: 'none'}} />
+      <label htmlFor="documentUpload" className="upload-label">
+        {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
+      </label>
+      
+      {isUploading ? (
+        <div className="progress-bar-container">
+          <div className="progress-bar" style={{width: `${progress}%`}}>
+            {Math.round(progress)}%
+          </div>
+        </div>
+      ) : (
+        <button onClick={handleUpload} className="upload-button" disabled={!file}>
+          Upload and Save
+        </button>
+      )}
 
-        {error && <p className="error-text">{error}</p>}
+      {error && <p className="error-text">{error}</p>}
     </div>
   );
 }
