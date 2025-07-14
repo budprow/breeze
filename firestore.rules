@@ -17,18 +17,46 @@ service cloud.firestore {
       allow update, delete: if request.auth.uid == resource.data.ownerId;
     }
 
-    // A user can manage documents if they are an administrator.
+    // Rules for the 'documents' sub-collection.
     match /restaurants/{restaurantId}/documents/{docId} {
-        function isMember() {
-            return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
-        }
-        allow read, create: if isMember();
-        allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator';
+
+      // This function checks if the user is an administrator.
+      // It safely checks for the existence of the user doc and the 'role' field.
+      function isAdmin() {
+        let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+        return exists(userPath) &&
+               'role' in get(userPath).data &&
+               get(userPath).data.role == 'administrator';
+      }
+
+      // This function checks if the user is a member of the restaurant.
+      // It safely checks for the existence of the user doc and the 'restaurantId' field.
+      function isMember() {
+        let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+        return exists(userPath) &&
+               'restaurantId' in get(userPath).data &&
+               get(userPath).data.restaurantId == restaurantId;
+      }
+
+      // Allow reading and creating document records if the user is either
+      // a member of the restaurant OR an administrator. This now matches the storage rule.
+      allow read, create: if isMember() || isAdmin();
+
+      // Allow deleting only if the user is an administrator.
+      allow delete: if isAdmin();
     }
 
     // Invites can only be created by an administrator.
     match /invites/{inviteId} {
-        allow read, create: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator';
+        // This function is defined here to avoid repetition.
+        function isAdmin() {
+          let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+          return exists(userPath) &&
+                 'role' in get(userPath).data &&
+                 get(userPath).data.role == 'administrator';
+        }
+
+        allow read, create: if isAdmin();
         allow update: if request.auth != null; // Allows marking as used
     }
   }
