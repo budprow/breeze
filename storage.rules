@@ -2,14 +2,19 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // This rule applies to files inside the 'documents' folder.
+
+    // This rule applies to files inside a specific restaurant's 'documents' folder.
     match /documents/{restaurantId}/{allPaths=**} {
-    
-      // Allow read and write access IF the user is authenticated AND
-      // their auth token has a custom claim for 'restaurantId' that
-      // matches the folder they are trying to access.
-      allow read, write: if request.auth != null && request.auth.token.restaurantId == restaurantId;
+
+      // This function checks the Firestore database to see if the currently
+      // logged-in user belongs to the restaurant they are trying to access.
+      function isRestaurantMember() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
+      }
+
+      // Allow users to read and write (upload, delete) files if they are authenticated
+      // AND they are a member of the restaurant.
+      allow read, write: if request.auth != null && isRestaurantMember();
     }
   }
 }
