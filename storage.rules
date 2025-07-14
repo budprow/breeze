@@ -6,25 +6,25 @@ service firebase.storage {
     // This rule applies to files inside a specific restaurant's 'documents' folder.
     match /documents/{restaurantId}/{allPaths=**} {
 
-      // --- DEBUGGING STEP: SIMPLIFICATION TEST ---
-      // The rule below is a temporary test to isolate the problem.
-      // It allows any authenticated user to upload, bypassing the database check.
-      // If uploads succeed with this rule, the problem is confirmed to be in the
-      // 'isRestaurantMember' function's logic.
-      // If it still fails, the issue is more fundamental (e.g., authentication state).
-      //
-      // After testing, this should be reverted to a more secure rule.
+      // --- FINAL SECURE RULE ---
 
-      allow read, write: if request.auth != null;
-
-      // --- ORIGINAL COMPLEX RULE (CURRENTLY DISABLED FOR TESTING) ---
-      /*
+      // This function checks if the user's document in Firestore has a
+      // 'restaurantId' field that matches the folder they are trying to access.
       function isRestaurantMember() {
-        let userDocData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-        return 'restaurantId' in userDocData && userDocData.restaurantId == restaurantId;
+        let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        return 'restaurantId' in userData && userData.restaurantId == restaurantId;
       }
-      allow read, write: if request.auth != null && isRestaurantMember();
-      */
+
+      // This function checks if the user's document in Firestore has a
+      // 'role' field with the value 'administrator'.
+      function isAdministrator() {
+        let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        return 'role' in userData && userData.role == 'administrator';
+      }
+
+      // Allow read and write access if the user is authenticated AND
+      // they are either a member of this specific restaurant OR they are an administrator.
+      allow read, write: if request.auth != null && (isRestaurantMember() || isAdministrator());
     }
   }
 }
