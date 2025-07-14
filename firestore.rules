@@ -3,35 +3,30 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- THIS IS THE FIX ---
-    // Allow any authenticated user to read a user's profile (needed for Storage rules),
-    // but only the user themselves can create or update their own profile.
+    // A user can create their own profile, and can only read/update their own profile.
     match /users/{userId} {
       allow create;
-      allow read: if request.auth != null; // Changed from request.auth.uid == userId
-      allow update: if request.auth.uid == userId;
+      allow read, update: if request.auth.uid == userId;
     }
 
-    // Restaurants can be read by any authenticated user, but only the owner can manage it.
+    // Restaurants can be read by any authenticated user.
+    // Only the owner (the original administrator) can manage it.
     match /restaurants/{restaurantId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow update, delete: if request.auth.uid == resource.data.ownerId;
     }
 
-    // Any authenticated user belonging to the restaurant can manage documents.
+    // A user can manage documents if they are an administrator.
     match /restaurants/{restaurantId}/documents/{docId} {
-      function isOwner() {
-        return request.auth.uid == resource.data.ownerId;
-      }
-      function isMember() {
-        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
-      }
-      allow read, create: if isMember();
-      allow delete: if isOwner() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator';
+        function isMember() {
+            return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
+        }
+        allow read, create: if isMember();
+        allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator';
     }
 
-    // Invites are managed at the top level now
+    // Invites can only be created by an administrator.
     match /invites/{inviteId} {
         allow read, create: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator';
         allow update: if request.auth != null; // Allows marking as used

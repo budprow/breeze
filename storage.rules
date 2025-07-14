@@ -3,18 +3,13 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
+    // This rule applies to files inside the 'documents' folder.
     match /documents/{restaurantId}/{allPaths=**} {
     
-      // This is the new, more robust function.
-      // It first CHECKS if the user document exists, then it gets the data.
-      function isMember() {
-        return request.auth != null && 
-               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
-      }
-
-      // The rule remains the same, but the function it calls is now safer.
-      allow read, write: if isMember();
+      // Allow read and write access IF the user is authenticated AND
+      // their auth token has a custom claim for 'restaurantId' that
+      // matches the folder they are trying to access.
+      allow read, write: if request.auth != null && request.auth.token.restaurantId == restaurantId;
     }
   }
 }
