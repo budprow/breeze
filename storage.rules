@@ -9,7 +9,13 @@ service firebase.storage {
       // This function checks the Firestore database to see if the currently
       // logged-in user belongs to the restaurant they are trying to access.
       function isRestaurantMember() {
-        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId == restaurantId;
+        // Get the data from the user's document in Firestore.
+        let userDocData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+
+        // Check that the 'restaurantId' key exists in the user's document AND
+        // that its value matches the folder they are trying to access.
+        // This is safer and prevents errors if a user document is missing the field.
+        return 'restaurantId' in userDocData && userDocData.restaurantId == restaurantId;
       }
 
       // Allow users to read and write (upload, delete) files if they are authenticated
