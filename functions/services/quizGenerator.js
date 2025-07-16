@@ -36,9 +36,7 @@ const generateMultipleChoice = async (genAI, text, refinementText) => {
   return parseJsonFromAiResponse(result.response.text());
 };
 
-
 // This line makes the function(s) available to be imported in other files
 module.exports = {
   generateMultipleChoice,
-  // When you add generateTrueFalse, etc., you will export them here too.
 };

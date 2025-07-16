@@ -112,3 +112,61 @@
 .restart-button {
   background-color: #007bff;
 }
+
+/* Add these new styles to your existing Quiz.css */
+
+.results-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+.action-button {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 8px;
+    border: none;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.action-button.save {
+    background-color: #28a745; /* Green */
+}
+
+.action-button.no-save {
+    background-color: #6c757d; /* Gray */
+}
+
+.action-button.regenerate {
+    background-color: #007bff; /* Blue */
+}
+
+.refinement-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.refinement-section label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #333;
+}
+
+.refinement-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+  min-height: 80px;
+}

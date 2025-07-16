@@ -2,33 +2,24 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Users can read/update their own profile.
+    
+    // Users can create their own profile, and can only read/update their own.
     match /users/{userId} {
       allow create;
       allow read, update: if request.auth.uid == userId;
     }
 
-    // Any authenticated user can read restaurant data.
-    match /restaurants/{restaurantId} {
-      allow read, create: if request.auth != null;
-      allow update, delete: if request.auth.uid == resource.data.ownerId;
+    // Any user can manage quizzes that they own.
+    match /quizzes/{quizId} {
+        allow read, write, delete: if request.auth.uid == resource.data.ownerId;
     }
 
-    // Rules for the 'documents' sub-collection.
-    match /restaurants/{restaurantId}/documents/{docId} {
-      // Allow a user to create a document record IF their UID
-      // matches the 'owner' field in the data they are trying to save.
-      allow create: if request.auth.uid == request.resource.data.owner;
-
-      // Any authenticated user can read document records.
-      allow read: if request.auth != null;
-    }
-    
-    // Keep other rules as they were.
-    match /invites/{inviteId} {
-      allow read, create: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrator';
-      allow update: if request.auth != null;
+    // --- NEW RULE FOR QUIZ INVITES ---
+    // Any logged-in user can create an invite.
+    match /quizInvites/{inviteId} {
+      allow create: if request.auth != null;
+      // Read access will be needed later by the invitee
+      allow read: if request.auth != null; 
     }
   }
 }

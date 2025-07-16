@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore'; // Import addDoc and serverTimestamp
 import { ref, deleteObject } from 'firebase/storage';
-import { auth, db, storage } from '../firebase';
+import { db, storage } from '../firebase'; // Removed auth as it is not used
 import DocumentUploader from './DocumentUploader';
 import Quiz from '../Quiz';
-import axios from 'axios'; // <-- THIS IS THE MISSING LINE
+import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
@@ -38,11 +38,17 @@ function Dashboard({ user, userProfile }) {
     restaurantId ? query(collection(db, 'restaurants', restaurantId, 'documents')) : null
   );
 
+  // New hook to fetch saved quizzes
+  const [quizzesValue, quizzesLoading, quizzesError] = useCollection(
+    restaurantId ? query(collection(db, 'restaurants', restaurantId, 'quizzes')) : null
+  );
+
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [refinement, setRefinement] = useState('');
   const [quizData, setQuizData] = useState(null);
+  const [extractedText, setExtractedText] = useState('');
 
   const handleDelete = async (documentToDelete) => {
     if (!restaurantId) return;
@@ -101,29 +107,53 @@ function Dashboard({ user, userProfile }) {
         fileReader.onerror = (error) => reject(error);
     });
   };
-
-  const handleGenerateQuiz = async () => {
-    if (!selectedDoc) return;
-    setIsLoading(true);
-    setProgress(0);
-    try {
-      const docUrl = selectedDoc.data().url;
-      const response = await axios.get(docUrl, { responseType: 'blob' });
-      const fileBlob = response.data;
-      const fileType = fileBlob.type;
-      let extractedText = '';
-      if (fileType.startsWith('image/')) {
-        extractedText = await processImage(fileBlob);
-      } else if (fileType === 'application/pdf') {
-        extractedText = await processPdf(fileBlob);
-      } else {
-        throw new Error("Unsupported file type for quiz generation.");
+  
+  const extractTextAndSetState = async () => {
+      if (!selectedDoc) return;
+      setIsLoading(true);
+      try {
+        const docUrl = selectedDoc.data().url;
+        const response = await axios.get(docUrl, { responseType: 'blob' });
+        const fileBlob = response.data;
+        const fileType = fileBlob.type;
+        let text = '';
+        if (fileType.startsWith('image/')) {
+          text = await processImage(fileBlob);
+        } else if (fileType === 'application/pdf') {
+          text = await processPdf(fileBlob);
+        } else {
+          throw new Error("Unsupported file type.");
+        }
+        setExtractedText(text);
+        return text;
+      } catch (error) {
+        console.error("Error extracting text:", error);
+        alert("Sorry, there was an error processing the document.");
+        return null;
+      } finally {
+        setIsLoading(false);
       }
-      setProgress(50);
+  }
+
+  const handleGenerateQuiz = async (refinementText = refinement) => {
+    let textToProcess = extractedText;
+    if (!textToProcess) {
+        textToProcess = await extractTextAndSetState();
+    }
+    
+    if (!textToProcess) {
+        // If text extraction failed or is empty
+        alert("Could not extract text from the document to generate a quiz.");
+        return;
+    }
+
+    setIsLoading(true);
+    setProgress(50); // Text is ready, now generating
+    try {
       const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
       const quizResponse = await axios.post(`${apiUrl}/generate-quiz`, {
-        text: extractedText,
-        refinementText: refinement,
+        text: textToProcess,
+        refinementText: refinementText,
       });
       setQuizData(quizResponse.data.questions);
       setProgress(100);
@@ -135,14 +165,51 @@ function Dashboard({ user, userProfile }) {
     }
   };
   
+  const handleRegenerateQuiz = async (newRefinement) => {
+    setRefinement(newRefinement);
+    setQuizData(null); // Go back to loading screen
+    await handleGenerateQuiz(newRefinement);
+  };
+
+  const handleSaveQuiz = async () => {
+    if (!restaurantId || !user || !quizData || !selectedDoc) {
+        alert("Cannot save quiz. Missing required information.");
+        return;
+    }
+    try {
+        const quizzesCollection = collection(db, 'restaurants', restaurantId, 'quizzes');
+        await addDoc(quizzesCollection, {
+            name: `Quiz for ${selectedDoc.data().name}`,
+            documentId: selectedDoc.id,
+            questions: quizData,
+            createdAt: serverTimestamp(),
+            owner: user.uid,
+        });
+        alert('Quiz saved successfully!');
+        handleBackToDashboard(); // Return to dashboard after saving
+    } catch (error) {
+        console.error("Error saving quiz:", error);
+        alert("Failed to save the quiz.");
+    }
+  };
+
   const handleBackToDashboard = () => {
     setSelectedDoc(null);
     setQuizData(null);
     setRefinement('');
+    setExtractedText('');
   };
   
   if (quizData) {
-    return <Quiz quizData={quizData} onGenerateNew={handleBackToDashboard} />;
+    return (
+      <Quiz 
+        quizData={quizData} 
+        onBackToDashboard={handleBackToDashboard}
+        onSaveQuiz={handleSaveQuiz}
+        onRegenerateQuiz={handleRegenerateQuiz}
+        initialRefinement={refinement}
+      />
+    );
   }
   
   if (selectedDoc) {
@@ -161,13 +228,13 @@ function Dashboard({ user, userProfile }) {
         </div>
         {isLoading && (
             <div className="progress-bar-container">
-                <div className="progress-bar" style={{width: `${progress}%`}}>{Math.round(progress)}%</div>
+                <div className="progress-bar" style={{width: `${progress}%`}}>{progress > 0 ? `${Math.round(progress)}%` : ''}</div>
             </div>
         )}
         <div className="document-actions">
             <button onClick={handleBackToDashboard} className="action-btn delete-btn">Back</button>
-            <button onClick={handleGenerateQuiz} className="action-btn generate-btn" disabled={isLoading}>
-                {isLoading ? 'Generating...' : 'Generate Quiz'}
+            <button onClick={() => handleGenerateQuiz(refinement)} className="action-btn generate-btn" disabled={isLoading}>
+                {isLoading ? 'Processing...' : 'Generate Quiz'}
             </button>
         </div>
       </div>
@@ -214,6 +281,31 @@ function Dashboard({ user, userProfile }) {
           )}
         </div>
       </div>
+
+      {!isGuest && (
+        <div className="dashboard-section">
+          <h3>My Quizzes</h3>
+          {quizzesError && <strong>Error: {JSON.stringify(quizzesError)}</strong>}
+          {quizzesLoading && <span>Loading quizzes...</span>}
+          {quizzesValue && (
+            <ul className="document-list">
+              {quizzesValue.docs.map((quiz) => (
+                <li key={quiz.id} className="document-item">
+                  <span>{quiz.data().name}</span>
+                  {/* Placeholder for future actions */}
+                  <div className="document-actions">
+                    <button className="action-btn view-btn">Take Quiz</button>
+                    <button className="action-btn delete-btn">Delete</button>
+                  </div>
+                </li>
+              ))}
+              {quizzesValue.docs.length === 0 && !quizzesLoading && (
+                <p className="no-documents">You haven't saved any quizzes yet.</p>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
 
       {userProfile?.role === 'administrator' && (
         <div className="dashboard-section">

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import Tesseract from 'tesseract.js';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import axios from 'axios';
+import api from './api'; // <-- Import your centralized API config
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
+import QuizFlow from './QuizFlow';
 import './ImageUploader.css';
-import Quiz from './Quiz.jsx';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
 
@@ -14,24 +14,22 @@ function preprocessCanvas(canvas) {
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const contrast = 1.5; 
+        const contrast = 1.5;
         let value = (avg - 128) * contrast + 128;
         if (value > 255) value = 255;
         if (value < 0) value = 0;
-        data[i] = data[i+1] = data[i+2] = value;
+        data[i] = data[i + 1] = data[i + 2] = value;
     }
     ctx.putImageData(imageData, 0, 0);
     return canvas;
 }
 
-function ImageUploader() {
+function ImageUploader({ onQuizGeneratedForUser }) {
     const [selectedFiles, setSelectedFiles] = useState([]);
-    const [groupName, setGroupName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [ocrText, setOcrText] = useState('');
-    const [quizData, setQuizData] = useState(null);
-    const [refinement, setRefinement] = useState('');
+    const [activeQuiz, setActiveQuiz] = useState(null);
 
     const handleFileChange = (event) => {
         const files = Array.from(event.target.files);
@@ -39,23 +37,18 @@ function ImageUploader() {
             setSelectedFiles(files);
             setOcrText('');
             setProgress(0);
-            setQuizData(null);
-            setRefinement('');
+            setActiveQuiz(null);
         }
     };
 
     const handleExtractText = async () => {
         if (selectedFiles.length === 0) return;
         setIsLoading(true);
-        setQuizData(null);
         let combinedText = '';
-
         try {
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
                 let extractedText = '';
-                setProgress(Math.round(((i + 1) / selectedFiles.length) * 50)); // Progress up to 50%
-                
                 if (file.type.startsWith('image/')) {
                     extractedText = await processImage(file);
                 } else if (file.type === 'application/pdf') {
@@ -64,17 +57,19 @@ function ImageUploader() {
                 combinedText += extractedText + '\n\n';
             }
             setOcrText(combinedText);
-            setProgress(100);
         } catch (error) {
-            console.error("An error occurred during file processing:", error);
-            alert("Sorry, something went wrong during processing.");
+            alert("Sorry, something went wrong during text extraction.");
         } finally {
             setIsLoading(false);
         }
     };
-    
+
     const processImage = async (file) => {
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+            logger: (m) => {
+                if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 100));
+            },
+        });
         return text;
     };
 
@@ -101,46 +96,51 @@ function ImageUploader() {
         });
     };
 
-    const generateQuiz = async () => {
-        if (!ocrText) {
-            alert("Please extract text from your documents first!");
-            return;
-        }
+    const handleGenerateQuiz = async () => {
+        if (!ocrText) return;
         setIsLoading(true);
-        setProgress(0);
         try {
-            const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
-            const response = await axios.post(`${apiUrl}/generate-quiz`, {
-                text: ocrText,
-                refinementText: refinement,
-            });
-            setQuizData(response.data.questions);
+            // --- THIS IS THE FIX ---
+            // Use the centralized 'api' object which knows about the emulators
+            const response = await api.post('/generate-quiz', { text: ocrText });
+
+            if (onQuizGeneratedForUser) {
+                // If this is for a logged-in user, pass the data to the dashboard
+                onQuizGeneratedForUser({
+                    quizData: response.data,
+                    sourceText: ocrText
+                });
+            } else {
+                // If this is for a guest/demo, start the local flow
+                setActiveQuiz({
+                    quizData: response.data,
+                    sourceText: ocrText
+                });
+            }
+
         } catch (error) {
-            console.error("Error fetching quiz data:", error);
             alert("Sorry, there was an error creating the quiz.");
         } finally {
             setIsLoading(false);
         }
     };
-    
-    const handleGenerateNewQuiz = () => {
-        setQuizData(null);
-        setRefinement('');
-    };
-    
-    if (quizData) {
-        return <Quiz quizData={quizData} onGenerateNew={handleGenerateNewQuiz} />;
-    }
 
-    const fileInputLabel = selectedFiles.length > 0 
-        ? `${selectedFiles.length} file(s) selected. Change?` 
-        : 'Select Documents or Take Photo(s)';
+    if (activeQuiz) {
+        return (
+            <QuizFlow
+                initialQuizData={activeQuiz.quizData}
+                sourceText={activeQuiz.sourceText}
+                onFlowComplete={() => setActiveQuiz(null)}
+                isGuest={true}
+            />
+        );
+    }
 
     return (
         <div className="uploader-container">
             <div className="explanation-box">
                 <h2>Your Personal Study Sidekick</h2>
-                <p>Turn any document, textbook page, or lecture note into an interactive quiz. Use the instructions box to guide the AI, helping you focus on what's most important.</p>
+                <p>Upload documents or take photos. We'll turn them into an interactive quiz to help you learn faster.</p>
             </div>
 
             <div className="upload-step">
@@ -154,18 +154,11 @@ function ImageUploader() {
                     className="uploader-input"
                 />
                 <label htmlFor="fileInput" className="uploader-label">
-                    {fileInputLabel}
+                    Select Documents or Take Photo(s)
                 </label>
 
                 {selectedFiles.length > 0 && (
                     <div className="file-list-container">
-                        <input
-                            type="text"
-                            className="group-name-input"
-                            placeholder="Name this study set (e.g., 'Chapter 5 Notes')"
-                            value={groupName}
-                            onChange={(e) => setGroupName(e.target.value)}
-                        />
                         <ul>
                             {selectedFiles.map((file, index) => (
                                 <li key={index}>{file.name}</li>
@@ -174,30 +167,20 @@ function ImageUploader() {
                     </div>
                 )}
             </div>
-            
+
             {selectedFiles.length > 0 && !ocrText && (
                 <div className="upload-step">
                     <h3>Step 2: Extract Text</h3>
                     <button onClick={handleExtractText} className="process-button" disabled={isLoading}>
-                        {isLoading ? `Reading... ${progress}%` : 'Extract Text from Document(s)'}
+                        {isLoading ? `Reading... ${progress}%` : 'Extract Text from Documents'}
                     </button>
                 </div>
             )}
-            
+
             {ocrText && (
-                 <div className="upload-step">
+                <div className="upload-step">
                     <h3>Step 3: Generate Your Quiz</h3>
-                    <div className="refinement-container">
-                        <label htmlFor="refinementInput">Optional: Give the AI special instructions</label>
-                        <textarea
-                            id="refinementInput"
-                            className="refinement-input"
-                            placeholder='e.g., "focus on dates and names", "ignore the summary section"'
-                            value={refinement}
-                            onChange={(e) => setRefinement(e.target.value)}
-                        />
-                    </div>
-                    <button onClick={generateQuiz} className="process-button" disabled={isLoading}>
+                    <button onClick={handleGenerateQuiz} className="process-button" disabled={isLoading}>
                         {isLoading ? 'Generating Quiz...' : 'Generate Quiz Now'}
                     </button>
                 </div>
