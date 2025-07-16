@@ -97,3 +97,28 @@
   margin-top: 15px;
   font-size: 14px;
 }
+
+.separator {
+  margin: 20px 0;
+  color: #ccc;
+  text-align: center;
+  font-weight: bold;
+}
+
+.secondary-button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 5px;
+  border: 1px solid #007bff;
+  background-color: white;
+  color: #007bff;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 10px;
+}
+
+.secondary-button:hover {
+  background-color: #e7f1ff;
+}
