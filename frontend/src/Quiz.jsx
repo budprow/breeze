@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import './Quiz.css';
 
-function Quiz({ quizData, onBackToDashboard, onSaveQuiz, onRegenerateQuiz, initialRefinement }) {
+// Added isRetake to the props
+function Quiz({ quizData, onBackToDashboard, onSaveQuiz, onRegenerateQuiz, initialRefinement, isGuest, isRetake }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -45,14 +46,28 @@ function Quiz({ quizData, onBackToDashboard, onSaveQuiz, onRegenerateQuiz, initi
   };
 
   if (showResults) {
+    // If it's a retake, show a simplified results screen
+    if (isRetake) {
+        return (
+            <div className="quiz-container results-screen">
+                <h2>Quiz Complete!</h2>
+                <p className="final-score">Your Score: {score} out of {quizData.length}</p>
+                <button onClick={onBackToDashboard} className="action-button regenerate">
+                    Back to Dashboard
+                </button>
+            </div>
+        );
+    }
+
+    // Otherwise, show the full screen with save/regenerate options
     return (
       <div className="quiz-container results-screen">
         <h2>Quiz Complete!</h2>
         <p className="final-score">Your Score: {score} out of {quizData.length}</p>
 
         <div className="results-actions">
-            <button onClick={onSaveQuiz} className="action-button save">
-                Save and Return to Dashboard
+            <button onClick={onSaveQuiz} className="action-button save" disabled={isGuest}>
+                {isGuest ? "Sign Up to Save" : "Save and Return to Dashboard"}
             </button>
             <button onClick={onBackToDashboard} className="action-button no-save">
                 Return without Saving
