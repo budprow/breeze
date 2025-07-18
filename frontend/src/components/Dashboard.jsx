@@ -209,7 +209,7 @@ function Dashboard({ user, userProfile, profileLoading }) {
     }
 
     if (!restaurantId) {
-        alert("Cannot save quiz. Your organization ID is missing.");
+        alert("Could not find your organization ID. Please try again.");
         return;
     }
     

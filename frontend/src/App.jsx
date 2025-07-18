@@ -17,10 +17,8 @@ function App() {
   );
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        await currentUser.getIdToken(true);
-      }
+    // Simplified onAuthStateChanged
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
     });
@@ -31,7 +29,6 @@ function App() {
     await signOut(auth);
   };
 
-  // The main loading screen now waits for BOTH auth and profile to be ready.
   const isLoading = authLoading || (user && !user.isAnonymous && profileLoading);
 
   if (isLoading) {
@@ -51,8 +48,7 @@ function App() {
       </header>
       
       <main className="app-container">
-        {/* We now pass profileLoading down to the Dashboard component */}
-        {user ? <Dashboard user={user} userProfile={userProfile} profileLoading={profileLoading} /> : <Auth />}
+        {user ? <Dashboard user={user} userProfile={userProfile} /> : <Auth />}
       </main>
     </div>
   );
