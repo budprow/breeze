@@ -2,24 +2,17 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Users can create their own profile, and can only read/update their own.
+
+    // Users can only read and write to their own user profile.
     match /users/{userId} {
-      allow create;
-      allow read, update: if request.auth.uid == userId;
+      allow read, write: if request.auth.uid == userId;
     }
 
-    // Any user can manage quizzes that they own.
-    match /quizzes/{quizId} {
-        allow read, write, delete: if request.auth.uid == resource.data.ownerId;
-    }
-
-    // --- NEW RULE FOR QUIZ INVITES ---
-    // Any logged-in user can create an invite.
-    match /quizInvites/{inviteId} {
-      allow create: if request.auth != null;
-      // Read access will be needed later by the invitee
-      allow read: if request.auth != null; 
+    // Documents can be created by any authenticated user.
+    // They can only be read, updated, or deleted by the user who owns them.
+    match /documents/{documentId} {
+      allow read, update, delete: if request.auth.uid == resource.data.ownerId;
+      allow create: if request.auth.uid != null;
     }
   }
 }

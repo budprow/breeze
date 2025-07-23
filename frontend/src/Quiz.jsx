@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import './Quiz.css';
 
-// Added isRetake to the props
-function Quiz({ quizData, onBackToDashboard, onSaveQuiz, onRegenerateQuiz, initialRefinement, isGuest, isRetake }) {
+function Quiz({ quizData, onComplete }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [showResults, setShowResults] = useState(false);
-  const [refinementText, setRefinementText] = useState(initialRefinement || '');
   const currentQuestion = quizData[currentQuestionIndex];
 
   const handleAnswerSelect = (option) => {
@@ -38,55 +36,19 @@ function Quiz({ quizData, onBackToDashboard, onSaveQuiz, onRegenerateQuiz, initi
       setShowResults(true);
     }
   };
-
-  const handleRegenerate = () => {
-    if (onRegenerateQuiz) {
-        onRegenerateQuiz(refinementText);
-    }
+  
+  const handleCompletion = () => {
+    // Pass the final score and the quiz data back to the parent
+    onComplete(score, quizData);
   };
 
-  if (showResults) {
-    // If it's a retake, show a simplified results screen
-    if (isRetake) {
-        return (
-            <div className="quiz-container results-screen">
-                <h2>Quiz Complete!</h2>
-                <p className="final-score">Your Score: {score} out of {quizData.length}</p>
-                <button onClick={onBackToDashboard} className="action-button regenerate">
-                    Back to Dashboard
-                </button>
-            </div>
-        );
-    }
 
-    // Otherwise, show the full screen with save/regenerate options
+  if (showResults) {
     return (
       <div className="quiz-container results-screen">
         <h2>Quiz Complete!</h2>
         <p className="final-score">Your Score: {score} out of {quizData.length}</p>
-
-        <div className="results-actions">
-            <button onClick={onSaveQuiz} className="action-button save" disabled={isGuest}>
-                {isGuest ? "Sign Up to Save" : "Save and Return to Dashboard"}
-            </button>
-            <button onClick={onBackToDashboard} className="action-button no-save">
-                Return without Saving
-            </button>
-        </div>
-
-        <div className="refinement-section">
-          <label htmlFor="refinementInput">Want different questions? Give the AI new instructions:</label>
-          <textarea
-            id="refinementInput"
-            className="refinement-input"
-            placeholder='e.g., "focus on definitions", "make the questions harder"'
-            value={refinementText}
-            onChange={(e) => setRefinementText(e.target.value)}
-          />
-          <button onClick={handleRegenerate} className="action-button regenerate">
-            Generate Updated Quiz
-          </button>
-        </div>
+        <button onClick={handleCompletion} className="restart-button">Save and Return to Dashboard</button>
       </div>
     );
   }

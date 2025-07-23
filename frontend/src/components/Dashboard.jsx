@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, doc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
 import Quiz from '../Quiz';
-import axios from 'axios';
+import api from '../api';
+import axios from 'axios'; // <-- THIS WAS THE MISSING LINE
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
-import InviteManager from './InviteManager';
 import './Dashboard.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
@@ -30,34 +30,27 @@ function preprocessCanvas(canvas) {
     return canvas;
 }
 
-function Dashboard({ user, userProfile, profileLoading }) {
-  const restaurantId = userProfile?.restaurantId;
+function Dashboard({ user }) {
   const isGuest = user.isAnonymous;
 
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [extractedText, setExtractedText] = useState('');
-  const [quizTitle, setQuizTitle] = useState('');
+  const docsQuery = user ? query(collection(db, 'documents'), where('ownerId', '==', user.uid)) : null;
+  const [docsValue, docsLoading, docsError] = useCollection(docsQuery);
 
-  const [docsValue, docsLoading, docsError] = useCollection(
-    restaurantId && !isGuest ? query(collection(db, 'restaurants', restaurantId, 'documents')) : null
-  );
-  const [quizzesValue, quizzesLoading, quizzesError] = useCollection(
-    restaurantId && !isGuest ? query(collection(db, 'restaurants', restaurantId, 'quizzes')) : null
-  );
+  const quizzesQuery = user ? query(collection(db, 'quizzes'), where('ownerId', '==', user.uid)) : null;
+  const [quizzesValue, quizzesLoading, quizzesError] = useCollection(quizzesQuery);
+
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [refinement, setRefinement] = useState('');
   const [quizData, setQuizData] = useState(null);
-  const [isRetake, setIsRetake] = useState(false);
 
-  const handleDeleteDoc = async (documentToDelete) => {
-    if (!restaurantId || isGuest) return;
+  const handleDelete = async (documentToDelete) => {
     if (!window.confirm(`Are you sure you want to delete "${documentToDelete.data().name}"?`)) return;
     try {
       const fileRef = ref(storage, documentToDelete.data().storagePath);
       await deleteObject(fileRef);
-      const docRef = doc(db, 'restaurants', restaurantId, 'documents', documentToDelete.id);
+      const docRef = doc(db, 'documents', documentToDelete.id);
       await deleteDoc(docRef);
     } catch (error) {
       console.error("Error deleting document:", error);
@@ -65,341 +58,197 @@ function Dashboard({ user, userProfile, profileLoading }) {
     }
   };
 
-  const handleDeleteQuiz = async (quizToDeleteId, quizToDeleteName) => {
-      if (!restaurantId || isGuest) return;
-      if (!window.confirm(`Are you sure you want to delete the quiz "${quizToDeleteName}"?`)) return;
-      try {
-          const docRef = doc(db, 'restaurants', restaurantId, 'quizzes', quizToDeleteId);
-          await deleteDoc(docRef);
-      } catch (error) {
-          console.error("Error deleting quiz:", error);
-          alert("Failed to delete quiz.");
-      }
-  }
+  const processImage = async (blob) => {
+    const { data: { text } } = await Tesseract.recognize(blob, 'eng', {
+        logger: (m) => {
+            if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 50));
+        },
+    });
+    return text;
+  };
 
-  const handleFileChange = (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length > 0) {
-        setSelectedFiles(files);
-        setExtractedText('');
-        setProgress(0);
+  const processPdf = async (blob) => {
+    const fileReader = new FileReader();
+    fileReader.readAsArrayBuffer(blob);
+    return new Promise((resolve, reject) => {
+        fileReader.onload = async () => {
+            try {
+                const typedarray = new Uint8Array(fileReader.result);
+                const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                let fullText = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    if (textContent.items.length > 0) {
+                        fullText += textContent.items.map((item) => item.str).join(' ');
+                    } else {
+                        const viewport = page.getViewport({ scale: 2 });
+                        const canvas = document.createElement('canvas');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        const context = canvas.getContext('2d');
+                        await page.render({ canvasContext: context, viewport }).promise;
+                        const preprocessedCanvas = preprocessCanvas(canvas);
+                        const { data: { text } } = await Tesseract.recognize(preprocessedCanvas, 'eng');
+                        fullText += text;
+                    }
+                }
+                resolve(fullText);
+            } catch (error) {
+                reject(error);
+            }
+        };
+        fileReader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleGenerateQuiz = async () => {
+    if (!selectedDoc) return;
+    setIsLoading(true);
+    setProgress(0);
+    try {
+      const docUrl = selectedDoc.data().url;
+      const response = await axios.get(docUrl, { responseType: 'blob' });
+      const fileBlob = response.data;
+      const fileType = fileBlob.type;
+      let extractedText = '';
+      if (fileType.startsWith('image/')) {
+        extractedText = await processImage(fileBlob);
+      } else if (fileType === 'application/pdf') {
+        extractedText = await processPdf(fileBlob);
+      } else {
+        throw new Error("Unsupported file type for quiz generation.");
+      }
+      setProgress(50);
+
+      const quizResponse = await api.post(`/generate-quiz`, {
+        text: extractedText,
+        refinementText: refinement,
+      });
+      setQuizData(quizResponse.data.questions);
+      setProgress(100);
+    } catch (error) {
+      console.error("Error generating quiz:", error);
+      alert("Sorry, there was an error generating the quiz.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveAndReturn = async (score, completedQuizData) => {
+    if (!selectedDoc) {
+        console.error("No selected document to associate the quiz with.");
+        alert("Could not save quiz. No document selected.");
+        return;
+    }
+    try {
+        await api.post('/save-quiz', {
+            quizData: completedQuizData,
+            score: score,
+            documentId: selectedDoc.id,
+            documentName: selectedDoc.data().name,
+        });
+        setSelectedDoc(null);
         setQuizData(null);
         setRefinement('');
-        setSelectedDoc(null);
-        setQuizTitle('');
-    }
-  };
-
-    const processImage = async (file) => {
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
-        return text;
-    };
-    const processPdf = async (file) => {
-        const fileReader = new FileReader();
-        fileReader.readAsArrayBuffer(file);
-        return new Promise((resolve, reject) => {
-            fileReader.onload = async () => {
-                try {
-                    const typedarray = new Uint8Array(fileReader.result);
-                    const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
-                    let fullText = '';
-                    for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        if (textContent.items.length > 0) {
-                            fullText += textContent.items.map((item) => item.str).join(' ');
-                        } else {
-                            const viewport = page.getViewport({ scale: 2 });
-                            const canvas = document.createElement('canvas');
-                            canvas.height = viewport.height;
-                            canvas.width = viewport.width;
-                            const context = canvas.getContext('2d');
-                            await page.render({ canvasContext: context, viewport }).promise;
-                            const preprocessedCanvas = preprocessCanvas(canvas);
-                            const { data: { text } } = await Tesseract.recognize(preprocessedCanvas, 'eng');
-                            fullText += text;
-                        }
-                    }
-                    resolve(fullText);
-                } catch (error) {
-                    reject(error);
-                }
-            };
-            fileReader.onerror = (error) => reject(error);
-        });
-    };
-    const extractTextFromFiles = async () => {
-        if (selectedFiles.length === 0) return null;
-        let combinedText = '';
-        for (let i = 0; i < selectedFiles.length; i++) {
-            const file = selectedFiles[i];
-            let text = '';
-            setProgress(Math.round(((i + 1) / selectedFiles.length) * 50));
-            if (file.type.startsWith('image/')) {
-                text = await processImage(file);
-            } else if (file.type === 'application/pdf') {
-                text = await processPdf(file);
-            }
-            combinedText += text + '\n\n';
-        }
-        return combinedText;
-    };
-    const extractTextFromDoc = async () => {
-        if (!selectedDoc) return null;
-        const docUrl = selectedDoc.data().url;
-        const response = await axios.get(docUrl, { responseType: 'blob' });
-        const fileBlob = response.data;
-        const fileType = fileBlob.type;
-        if (fileType.startsWith('image/')) {
-            return await processImage(fileBlob);
-        } else if (fileType === 'application/pdf') {
-            return await processPdf(fileBlob);
-        }
-        throw new Error("Unsupported file type.");
-    }
-
-  const handleGenerateQuiz = async (refinementText = refinement) => {
-    setIsLoading(true);
-    setIsRetake(false);
-    let textToProcess = extractedText;
-
-    try {
-        if (!textToProcess) {
-            if(selectedFiles.length > 0) {
-                textToProcess = await extractTextFromFiles();
-            } else if (selectedDoc) {
-                textToProcess = await extractTextFromDoc();
-            }
-        }
-
-        if (!textToProcess) {
-            alert("Could not find text to process. Please upload or select a document first.");
-            setIsLoading(false);
-            return;
-        }
-
-        setExtractedText(textToProcess);
-        setProgress(50);
-        const apiUrl = "https://us-central1-breeze-9c703.cloudfunctions.net/api";
-        const quizResponse = await axios.post(`${apiUrl}/generate-quiz`, {
-            text: textToProcess,
-            refinementText: refinementText,
-        });
-        setQuizData(quizResponse.data.questions);
-        setProgress(100);
-
-    } catch (error) {
-        console.error("Error during quiz generation:", error);
-        alert("Sorry, there was an error generating the quiz.");
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  const handleRegenerateQuiz = async (newRefinement) => {
-    setRefinement(newRefinement);
-    setQuizData(null);
-    await handleGenerateQuiz(newRefinement);
-  };
-
-  const handleSaveQuiz = async () => {
-    if (isGuest) {
-        alert("Sign up for a free account to save your quizzes!");
-        return;
-    }
-
-    if (!restaurantId) {
-        alert("Could not find your organization ID. Please try again.");
-        return;
-    }
-    
-    const docName = quizTitle || (selectedDoc ? selectedDoc.data().name : selectedFiles.length > 0 ? selectedFiles[0].name : "Untitled Quiz");
-
-    if (!quizData) {
-        alert("Cannot save quiz. No quiz data available.");
-        return;
-    }
-
-    try {
-        const quizzesCollection = collection(db, 'restaurants', restaurantId, 'quizzes');
-        await addDoc(quizzesCollection, {
-            name: docName,
-            documentId: selectedDoc ? selectedDoc.id : null,
-            questions: quizData,
-            createdAt: serverTimestamp(),
-            owner: user.uid,
-        });
-        alert('Quiz saved successfully!');
-        handleBackToDashboard();
     } catch (error) {
         console.error("Error saving quiz:", error);
-        alert("Failed to save the quiz.");
+        alert("Sorry, there was an error saving your quiz results.");
     }
   };
 
-  const handleBackToDashboard = () => {
-    setSelectedDoc(null);
-    setQuizData(null);
-    setRefinement('');
-    setExtractedText('');
-    setSelectedFiles([]);
-    setProgress(0);
-    setIsRetake(false);
-    setQuizTitle('');
-  };
-
-  const handleTakeQuiz = (quiz) => {
-    setQuizData(quiz.questions);
-    setIsRetake(true);
-  }
-
   if (quizData) {
-    return (
-      <Quiz
-        quizData={quizData}
-        onBackToDashboard={handleBackToDashboard}
-        onSaveQuiz={handleSaveQuiz}
-        onRegenerateQuiz={handleRegenerateQuiz}
-        initialRefinement={refinement}
-        isGuest={isGuest}
-        isRetake={isRetake}
-      />
-    );
+    return <Quiz quizData={quizData} onComplete={handleSaveAndReturn} />;
   }
 
-  const renderUploader = () => {
-      const fileInputLabel = selectedFiles.length > 0
-          ? `${selectedFiles.length} file(s) selected. Change?`
-          : 'Choose Document(s) or Take Photo(s)';
-
-      const showGenerateButton = selectedFiles.length > 0 || selectedDoc;
-      const isUiDisabled = isLoading || (!isGuest && profileLoading);
-
-      let generateButtonText = 'Generate Quiz';
-      if(isLoading) {
-          generateButtonText = progress < 50 ? 'Reading...' : 'Generating...';
-      } else if (profileLoading && !isGuest) {
-          generateButtonText = 'Loading Profile...';
-      } else if (selectedDoc) {
-          generateButtonText = 'Generate Quiz from Saved Doc';
-      } else if (selectedFiles.length > 0) {
-          generateButtonText = 'Generate Quiz from Upload';
-      }
-
-      return (
-        <>
-            <div className="upload-step">
-                <h3>{isGuest ? 'Step 1: Upload Your Materials' : 'Generate a New Quiz'}</h3>
-                <input type="file" id="fileInput" multiple accept="image/*,application/pdf" onChange={handleFileChange} style={{display: 'none'}} />
-                <label htmlFor="fileInput" className="uploader-label">{fileInputLabel}</label>
-                
-                {selectedFiles.length > 0 && (
-                    <div className="file-list-container">
-                        <input
-                            type="text"
-                            className="group-name-input"
-                            placeholder="Name this study set (e.g., 'Chapter 5 Notes')"
-                            value={quizTitle}
-                            onChange={(e) => setQuizTitle(e.target.value)}
-                        />
-                        <ul className="file-list-preview">
-                            {selectedFiles.map((file, index) => <li key={index}>{file.name}</li>)}
-                        </ul>
-                    </div>
-                )}
+  if (selectedDoc) {
+    return (
+      <div className="dashboard-container">
+        <h3>Generate Quiz for: {selectedDoc.data().name}</h3>
+        <div className="refinement-container">
+          <label htmlFor="refinementInput">Optional: Add instructions for the quiz</label>
+          <textarea
+            id="refinementInput"
+            className="refinement-input"
+            placeholder='e.g., "focus on ingredients", "ignore prices"'
+            value={refinement}
+            onChange={(e) => setRefinement(e.target.value)}
+          />
+        </div>
+        {isLoading && (
+            <div className="progress-bar-container">
+                <div className="progress-bar" style={{width: `${progress}%`}}>{Math.round(progress)}%</div>
             </div>
-
-            {(showGenerateButton) && (
-                 <div className="upload-step">
-                    <h3>{isGuest ? 'Step 2: Generate Quiz' : 'Add Instructions (Optional)'}</h3>
-                    <div className="refinement-container">
-                        <textarea
-                            id="refinementInput"
-                            className="refinement-input"
-                            placeholder='e.g., "focus on dates and names", "ignore the summary section"'
-                            value={refinement}
-                            onChange={(e) => setRefinement(e.target.value)}
-                        />
-                    </div>
-                    {isLoading && (
-                        <div className="progress-bar-container">
-                            <div className="progress-bar" style={{width: `${progress}%`}}>{progress > 0 ? `${Math.round(progress)}%` : ''}</div>
-                        </div>
-                    )}
-                    <button onClick={() => handleGenerateQuiz(refinement)} className="process-button" disabled={isUiDisabled}>
-                        {generateButtonText}
-                    </button>
-                </div>
-            )}
-        </>
-      )
+        )}
+        <div className="document-actions">
+            <button onClick={() => setSelectedDoc(null)} className="action-btn delete-btn">Back</button>
+            <button onClick={handleGenerateQuiz} className="action-btn generate-btn" disabled={isLoading}>
+                {isLoading ? 'Generating...' : 'Generate Quiz'}
+            </button>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="dashboard-container">
-      {renderUploader()}
+      <div className="dashboard-section">
+        <h3>My Study Documents</h3>
+        {isGuest ? (
+          <p className="guest-message">Sign up for a full account to upload and save your own documents!</p>
+        ) : (
+          <DocumentUploader />
+        )}
+        <div className="document-list">
+          {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
+          {docsLoading && <span>Loading documents...</span>}
+          {isGuest ? (
+            <p className="no-documents">Your uploaded documents appear here. Sign up to save your work!</p>
+          ) : docsValue && (
+            <ul>
+              {docsValue.docs.map((doc) => (
+                <li key={doc.id} className="document-item">
+                  <span>{doc.data().name}</span>
+                  <div className="document-actions">
+                      <button onClick={() => setSelectedDoc(doc)} className="action-btn generate-btn">
+                          Generate Quiz
+                      </button>
+                      <button onClick={() => handleDelete(doc)} className="action-btn delete-btn">
+                          Delete
+                      </button>
+                  </div>
+                </li>
+              ))}
+               {docsValue.docs.length === 0 && !docsLoading && (
+                  <p className="no-documents">You haven't uploaded any documents yet.</p>
+              )}
+            </ul>
+          )}
+        </div>
+      </div>
 
       {!isGuest && (
-        <>
-          <div className="dashboard-section">
-            <h3>My Training Documents</h3>
-            {userProfile?.role === 'administrator' && <DocumentUploader restaurantId={restaurantId} />}
-            <div className="document-list">
-              {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
-              {(docsLoading || profileLoading) && <span>Loading documents...</span>}
-              {docsValue && (
-                <ul>
-                  {docsValue.docs.map((doc) => (
-                    <li key={doc.id} className="document-item">
-                      <span>{doc.data().name}</span>
-                      <div className="document-actions">
-                          <button onClick={() => { setSelectedFiles([]); setSelectedDoc(doc); }} className="action-btn generate-btn">
-                              Generate Quiz
-                          </button>
-                          {userProfile?.role === 'administrator' && (
-                              <button onClick={() => handleDeleteDoc(doc)} className="action-btn delete-btn">
-                                  Delete
-                              </button>
-                          )}
-                      </div>
-                    </li>
-                  ))}
-                   {docsValue.docs.length === 0 && !docsLoading && (
-                      <p className="no-documents">You haven't uploaded any documents yet.</p>
-                  )}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          <div className="dashboard-section">
-            <h3>My Quizzes</h3>
+        <div className="dashboard-section">
+          <h3>My Quizzes</h3>
+          <div className="document-list">
             {quizzesError && <strong>Error: {JSON.stringify(quizzesError)}</strong>}
-            {(quizzesLoading || profileLoading) && <span>Loading quizzes...</span>}
+            {quizzesLoading && <span>Loading quizzes...</span>}
             {quizzesValue && (
-              <ul className="document-list">
+              <ul>
                 {quizzesValue.docs.map((quiz) => (
                   <li key={quiz.id} className="document-item">
-                    <span>{quiz.data().name}</span>
-                    <div className="document-actions">
-                      <button onClick={() => handleTakeQuiz(quiz.data())} className="action-btn view-btn">Take Quiz</button>
-                      <button onClick={() => handleDeleteQuiz(quiz.id, quiz.data().name)} className="action-btn delete-btn">Delete</button>
-                    </div>
+                    <span>
+                      {quiz.data().documentName} - Scored {quiz.data().score}/{quiz.data().totalQuestions}
+                    </span>
                   </li>
                 ))}
                 {quizzesValue.docs.length === 0 && !quizzesLoading && (
-                  <p className="no-documents">You haven't saved any quizzes yet.</p>
+                  <p className="no-documents">You haven't completed any quizzes yet.</p>
                 )}
               </ul>
             )}
           </div>
-
-          {userProfile?.role === 'administrator' && (
-            <div className="dashboard-section">
-              <InviteManager restaurantId={restaurantId} />
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );

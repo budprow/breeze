@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -18,13 +18,15 @@ function Auth() {
     e.preventDefault();
     setError('');
 
+    // Handle new user sign-up
     if (isSignUp) {
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        // Create a simple user profile document, no restaurantId or role needed
+        // Create a user profile in Firestore
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
+          role: 'user', // All users are standard users now
           createdAt: serverTimestamp()
         });
       } catch (err) {
@@ -53,11 +55,14 @@ function Auth() {
     }
   };
   
+  const title = isSignUp ? 'Create Your Account' : 'Welcome Back';
+  const subtitle = isSignUp ? 'Get started with your personal study sidekick.' : 'Sign in to continue.';
+
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h2>{isSignUp ? 'Create Your Account' : 'Welcome Back'}</h2>
-        <p className="auth-subtitle">{isSignUp ? 'Get started with your personal Study Buddy.' : 'Sign in to continue.'}</p>
+        <h2>{title}</h2>
+        <p className="auth-subtitle">{subtitle}</p>
         <form onSubmit={handleAuthAction}>
           <div className="input-group">
             <label htmlFor="email">Email</label>

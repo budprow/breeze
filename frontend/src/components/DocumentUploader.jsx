@@ -5,7 +5,7 @@ import { storage, db, auth } from '../firebase';
 import { v4 as uuidv4 } from 'uuid';
 import './DocumentUploader.css';
 
-function DocumentUploader({ restaurantId }) {
+function DocumentUploader() {
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
@@ -28,25 +28,22 @@ function DocumentUploader({ restaurantId }) {
   };
 
   const handleUpload = () => {
-    if (!file || !restaurantId || !user) {
-      setError("A required value is missing.");
+    if (!file || !user) {
+      setError("You must be logged in and select a file to upload.");
       return;
     }
 
     setIsUploading(true);
-    const storagePath = `documents/${restaurantId}/${uuidv4()}-${file.name}`;
+    // Simplified storage path: documents/{userId}/{fileId}-{fileName}
+    const storagePath = `documents/${user.uid}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
-
-    // *** THE FIX IS HERE ***
-    // We add the user's UID to the file's metadata.
-    // This is the "stamp" our new security rule will check.
+    
     const metadata = {
       customMetadata: {
         'ownerUid': user.uid
       }
     };
 
-    // Pass the metadata to the upload function.
     const uploadTask = uploadBytesResumable(storageRef, file, metadata);
 
     uploadTask.on('state_changed', 
@@ -58,14 +55,14 @@ function DocumentUploader({ restaurantId }) {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
-          const docData = {
+          // Add document metadata to the top-level 'documents' collection
+          await addDoc(collection(db, "documents"), {
             name: file.name,
             url: downloadURL,
             storagePath: storagePath,
             createdAt: serverTimestamp(),
-            owner: user.uid, // Keep this for Firestore rules
-          };
-          await addDoc(collection(db, "restaurants", restaurantId, "documents"), docData);
+            ownerId: user.uid,
+          });
           
           setIsUploading(false);
           setFile(null);
