@@ -15,11 +15,11 @@ admin.initializeApp();
 const app = express();
 
 // --- MIDDLEWARE ---
-// This is the fix: It explicitly handles the preflight `OPTIONS` requests
-// that browsers send to check CORS permissions, allowing them to pass through
-// before the token verification middleware is run.
+// ** THE FIX **
+// 1. `cors` must be the first middleware to handle preflight OPTIONS requests.
 app.use(cors({origin: true}));
 
+// 2. `express.json()` comes after cors.
 app.use(express.json());
 
 
@@ -49,6 +49,8 @@ const verifyFirebaseToken = async (req, res, next) => {
 
 // --- API ROUTES ---
 
+// 3. The `verifyFirebaseToken` middleware is now applied directly to each
+//    route that needs to be protected, NOT globally with `app.use()`.
 app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   if (!genAI) {
     return res.status(500).send("Server is not configured with a Gemini API key.");
@@ -69,7 +71,7 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
 
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
   const db = admin.firestore();
-  const {quizData, score, documentName, documentId} = req.body;
+  const { quizData, score, documentName, documentId } = req.body;
   const userId = req.user.uid;
 
   if (!quizData || score === undefined || !documentName || !documentId) {
