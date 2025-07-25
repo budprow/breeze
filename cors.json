@@ -1,7 +1,7 @@
 [
   {
     "origin": ["http://localhost:5173", "https://breeze-omega.vercel.app"],
-    "method": ["GET"],
+    "method": ["GET", "POST", "OPTIONS"],
     "maxAgeSeconds": 3600
   }
 ]

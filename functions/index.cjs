@@ -2,12 +2,10 @@ const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
 const functions = require("firebase-functions");
-const {GoogleGenerativeAI} = require("@google/generative-ai");
-const {onRequest} = require("firebase-functions/v2/http");
-const {FieldValue} = require("firebase-admin/firestore");
-const quizGenerator = require("./services/quizGenerator");
-
-// This line allows us to use a .env file for local development
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { onRequest } = require("firebase-functions/v2/http");
+const { FieldValue } = require("firebase-admin/firestore");
+const quizGenerator = require("./services/quizGenerator.cjs");
 require("dotenv").config();
 
 // --- INITIALIZATION ---
@@ -15,11 +13,16 @@ admin.initializeApp();
 const app = express();
 
 // --- MIDDLEWARE ---
-// ** THE FIX **
-// 1. `cors` must be the first middleware to handle preflight OPTIONS requests.
-app.use(cors({origin: true}));
+const corsOptions = {
+  origin: ["http://localhost:5173", "https://breeze-omega.vercel.app"],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204
+};
 
-// 2. `express.json()` comes after cors.
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+
 app.use(express.json());
 
 
@@ -49,14 +52,12 @@ const verifyFirebaseToken = async (req, res, next) => {
 
 // --- API ROUTES ---
 
-// 3. The `verifyFirebaseToken` middleware is now applied directly to each
-//    route that needs to be protected, NOT globally with `app.use()`.
 app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   if (!genAI) {
     return res.status(500).send("Server is not configured with a Gemini API key.");
   }
   try {
-    const {text, refinementText} = req.body;
+    const { text, refinementText } = req.body;
     if (!text) return res.status(400).send("No text provided.");
     const quizData = await quizGenerator.generateMultipleChoice(genAI, text, refinementText);
     if (!quizData) {
@@ -97,4 +98,4 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
 
 
 // --- CLOUD FUNCTION EXPORTS ---
-exports.api = onRequest({secrets: ["GEMINI_API_KEY"]}, app);
+exports.api = onRequest({ secrets: ["GEMINI_API_KEY"] }, app);
