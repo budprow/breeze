@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, where, getDoc } from 'firebase/firestore'; // Import getDoc
 import { ref, deleteObject } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
 import Quiz from '../Quiz';
 import api from '../api';
-import axios from 'axios'; // <-- THIS WAS THE MISSING LINE
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
+import QuizList from './QuizList';
 import './Dashboard.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
@@ -20,7 +20,7 @@ function preprocessCanvas(canvas) {
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
       const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      const contrast = 1.5;
+      const contrast = 1.5; 
       let value = (avg - 128) * contrast + 128;
       if (value > 255) value = 255;
       if (value < 0) value = 0;
@@ -31,18 +31,14 @@ function preprocessCanvas(canvas) {
 }
 
 function Dashboard({ user }) {
-  const isGuest = user.isAnonymous;
-
-  const docsQuery = user ? query(collection(db, 'documents'), where('ownerId', '==', user.uid)) : null;
-  const [docsValue, docsLoading, docsError] = useCollection(docsQuery);
-
-  const quizzesQuery = user ? query(collection(db, 'quizzes'), where('ownerId', '==', user.uid)) : null;
-  const [quizzesValue, quizzesLoading, quizzesError] = useCollection(quizzesQuery);
+  const [docsValue, docsLoading, docsError] = useCollection(
+    user ? query(collection(db, 'documents'), where('ownerId', '==', user.uid)) : null
+  );
 
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [refinement, setRefinement] = useState('');
+  const [refinementText, setRefinementText] = useState('');
   const [quizData, setQuizData] = useState(null);
 
   const handleDelete = async (documentToDelete) => {
@@ -106,12 +102,14 @@ function Dashboard({ user }) {
     if (!selectedDoc) return;
     setIsLoading(true);
     setProgress(0);
+    setQuizData(null); 
     try {
       const docUrl = selectedDoc.data().url;
-      const response = await axios.get(docUrl, { responseType: 'blob' });
+      const response = await api.get(docUrl, { responseType: 'blob' });
       const fileBlob = response.data;
       const fileType = fileBlob.type;
       let extractedText = '';
+
       if (fileType.startsWith('image/')) {
         extractedText = await processImage(fileBlob);
       } else if (fileType === 'application/pdf') {
@@ -119,14 +117,17 @@ function Dashboard({ user }) {
       } else {
         throw new Error("Unsupported file type for quiz generation.");
       }
+      
       setProgress(50);
-
+      
       const quizResponse = await api.post(`/generate-quiz`, {
         text: extractedText,
-        refinementText: refinement,
+        refinementText: refinementText,
       });
+      
       setQuizData(quizResponse.data.questions);
       setProgress(100);
+
     } catch (error) {
       console.error("Error generating quiz:", error);
       alert("Sorry, there was an error generating the quiz.");
@@ -134,33 +135,70 @@ function Dashboard({ user }) {
       setIsLoading(false);
     }
   };
-
-  const handleSaveAndReturn = async (score, completedQuizData) => {
-    if (!selectedDoc) {
-        console.error("No selected document to associate the quiz with.");
-        alert("Could not save quiz. No document selected.");
-        return;
-    }
-    try {
-        await api.post('/save-quiz', {
-            quizData: completedQuizData,
-            score: score,
-            documentId: selectedDoc.id,
-            documentName: selectedDoc.data().name,
-        });
-        setSelectedDoc(null);
-        setQuizData(null);
-        setRefinement('');
-    } catch (error) {
-        console.error("Error saving quiz:", error);
-        alert("Sorry, there was an error saving your quiz results.");
-    }
+  
+  const resetToDashboard = () => {
+    setSelectedDoc(null);
+    setQuizData(null);
+    setRefinementText('');
   };
 
-  if (quizData) {
-    return <Quiz quizData={quizData} onComplete={handleSaveAndReturn} />;
-  }
+  const handleSaveAndExit = async (score) => {
+    if (!quizData || !selectedDoc) return;
+    try {
+      await api.post('/save-quiz', {
+        quizData: quizData,
+        score: score,
+        documentName: selectedDoc.data().name,
+        documentId: selectedDoc.id,
+      });
+      alert("Quiz saved!");
+    } catch (error) {
+      console.error("Error saving quiz:", error);
+      alert("Could not save the quiz. Please try again.");
+    }
+    resetToDashboard();
+  };
+  
+  const handleRegenerate = () => {
+    handleGenerateQuiz();
+  };
 
+  const handleExitWithoutSaving = () => {
+    resetToDashboard();
+  };
+
+  // --- NEW HANDLERS FOR QUIZ LIST ---
+  const handleRetakeQuiz = (savedQuizData) => {
+    // We already have the quiz questions, so just set the state
+    setQuizData(savedQuizData);
+  };
+
+  const handleRefineQuiz = async (documentId) => {
+    // Find the original document from the documentId
+    const docRef = doc(db, 'documents', documentId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      // Set it as the selected document and enter the refinement flow
+      setSelectedDoc(docSnap);
+    } else {
+      console.error("Original document not found for this quiz.");
+      alert("Could not find the original document to refine this quiz.");
+    }
+  };
+  
+  if (quizData) {
+    return (
+      <Quiz
+        quizData={quizData}
+        onSaveAndExit={handleSaveAndExit}
+        onRegenerate={handleRegenerate}
+        onExitWithoutSaving={handleExitWithoutSaving}
+        refinementText={refinementText}
+        setRefinementText={setRefinementText}
+      />
+    );
+  }
+  
   if (selectedDoc) {
     return (
       <div className="dashboard-container">
@@ -171,8 +209,8 @@ function Dashboard({ user }) {
             id="refinementInput"
             className="refinement-input"
             placeholder='e.g., "focus on ingredients", "ignore prices"'
-            value={refinement}
-            onChange={(e) => setRefinement(e.target.value)}
+            value={refinementText}
+            onChange={(e) => setRefinementText(e.target.value)}
           />
         </div>
         {isLoading && (
@@ -181,7 +219,7 @@ function Dashboard({ user }) {
             </div>
         )}
         <div className="document-actions">
-            <button onClick={() => setSelectedDoc(null)} className="action-btn delete-btn">Back</button>
+            <button onClick={resetToDashboard} className="action-btn delete-btn">Back</button>
             <button onClick={handleGenerateQuiz} className="action-btn generate-btn" disabled={isLoading}>
                 {isLoading ? 'Generating...' : 'Generate Quiz'}
             </button>
@@ -189,12 +227,12 @@ function Dashboard({ user }) {
       </div>
     );
   }
-
+  
   return (
     <div className="dashboard-container">
       <div className="dashboard-section">
-        <h3>My Study Documents</h3>
-        {isGuest ? (
+        <h3>My Training Documents</h3>
+        {user.isAnonymous ? (
           <p className="guest-message">Sign up for a full account to upload and save your own documents!</p>
         ) : (
           <DocumentUploader />
@@ -202,8 +240,8 @@ function Dashboard({ user }) {
         <div className="document-list">
           {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
           {docsLoading && <span>Loading documents...</span>}
-          {isGuest ? (
-            <p className="no-documents">Your uploaded documents appear here. Sign up to save your work!</p>
+          {user.isAnonymous ? (
+            <p className="no-documents">This is where your uploaded documents would appear. Sign up to save your work!</p>
           ) : docsValue && (
             <ul>
               {docsValue.docs.map((doc) => (
@@ -227,27 +265,10 @@ function Dashboard({ user }) {
         </div>
       </div>
 
-      {!isGuest && (
+      {!user.isAnonymous && (
         <div className="dashboard-section">
-          <h3>My Quizzes</h3>
-          <div className="document-list">
-            {quizzesError && <strong>Error: {JSON.stringify(quizzesError)}</strong>}
-            {quizzesLoading && <span>Loading quizzes...</span>}
-            {quizzesValue && (
-              <ul>
-                {quizzesValue.docs.map((quiz) => (
-                  <li key={quiz.id} className="document-item">
-                    <span>
-                      {quiz.data().documentName} - Scored {quiz.data().score}/{quiz.data().totalQuestions}
-                    </span>
-                  </li>
-                ))}
-                {quizzesValue.docs.length === 0 && !quizzesLoading && (
-                  <p className="no-documents">You haven't completed any quizzes yet.</p>
-                )}
-              </ul>
-            )}
-          </div>
+          {/* Pass the new handlers down to the QuizList component */}
+          <QuizList onRetake={handleRetakeQuiz} onRefine={handleRefineQuiz} />
         </div>
       )}
     </div>

@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import './Quiz.css';
 
-function Quiz({ quizData, onComplete }) {
+function Quiz({
+  quizData,
+  onSaveAndExit,
+  onRegenerate,
+  onExitWithoutSaving,
+  refinementText,
+  setRefinementText
+}) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -36,19 +43,40 @@ function Quiz({ quizData, onComplete }) {
       setShowResults(true);
     }
   };
-  
-  const handleCompletion = () => {
-    // Pass the final score and the quiz data back to the parent
-    onComplete(score, quizData);
-  };
 
-
+  // --- NEW "Quiz Complete!" Screen ---
   if (showResults) {
     return (
       <div className="quiz-container results-screen">
         <h2>Quiz Complete!</h2>
         <p className="final-score">Your Score: {score} out of {quizData.length}</p>
-        <button onClick={handleCompletion} className="restart-button">Save and Return to Dashboard</button>
+
+        {/* Path B: Refine and Regenerate */}
+        <div className="refinement-container">
+          <label htmlFor="refinementInput">Refine your quiz with new instructions:</label>
+          <textarea
+            id="refinementInput"
+            className="refinement-input"
+            placeholder='e.g., "ignore prices", "focus on names and dates"'
+            value={refinementText}
+            onChange={(e) => setRefinementText(e.target.value)}
+          />
+          <button onClick={() => onRegenerate(score)} className="process-button regenerate-button">
+            Generate Updated Quiz
+          </button>
+        </div>
+
+        <div className="results-actions">
+          {/* Path A: Save and Exit */}
+          <button onClick={() => onSaveAndExit(score)} className="action-button save-exit-button">
+            Save and Return to Dashboard
+          </button>
+          
+          {/* Path C: Exit without Saving */}
+          <button onClick={onExitWithoutSaving} className="action-button exit-only-button">
+            Return to Dashboard (Don't Save)
+          </button>
+        </div>
       </div>
     );
   }

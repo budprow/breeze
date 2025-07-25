@@ -75,7 +75,7 @@
   text-align: center;
 }
 
-.check-button, .next-button, .restart-button {
+.check-button, .next-button {
   width: 50%;
   padding: 15px;
   font-size: 1.2rem;
@@ -100,73 +100,78 @@
   background-color: #28a745;
 }
 
+/* === NEW STYLES FOR RESULTS SCREEN === */
+
 .results-screen {
   text-align: center;
 }
 
 .final-score {
   font-size: 1.5rem;
-  margin: 20px 0;
+  margin: 20px 0 30px 0;
 }
 
-.restart-button {
-  background-color: #007bff;
+.refinement-container {
+  text-align: left;
+  margin-bottom: 20px;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f8f9fa;
 }
 
-/* Add these new styles to your existing Quiz.css */
-
-.results-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 30px;
-}
-
-.action-button {
-    width: 100%;
-    padding: 12px;
-    font-size: 1rem;
-    font-weight: bold;
-    border-radius: 8px;
-    border: none;
-    color: white;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.action-button.save {
-    background-color: #28a745; /* Green */
-}
-
-.action-button.no-save {
-    background-color: #6c757d; /* Gray */
-}
-
-.action-button.regenerate {
-    background-color: #007bff; /* Blue */
-}
-
-.refinement-section {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-}
-
-.refinement-section label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-    color: #333;
+.refinement-container label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: bold;
 }
 
 .refinement-input {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 1rem;
-  line-height: 1.5;
-  margin-bottom: 10px;
-  box-sizing: border-box;
   min-height: 80px;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.regenerate-button {
+  background-color: #28a745; /* Green */
+}
+
+.results-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.action-button {
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.save-exit-button {
+  background-color: #007bff;
+  color: white;
+}
+
+.save-exit-button:hover {
+  background-color: #0056b3;
+}
+
+.exit-only-button {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+}
+
+.exit-only-button:hover {
+  background-color: #e2e6ea;
 }

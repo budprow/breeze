@@ -6,18 +6,26 @@ import { auth, db } from './firebase';
 
 import Auth from './components/auth';
 import Dashboard from './components/Dashboard';
+import SharedQuiz from './SharedQuiz'; // Import the new component
 import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [quizId, setQuizId] = useState(null);
 
   const [userProfile, profileLoading] = useDocumentData(
     user && !user.isAnonymous ? doc(db, 'users', user.uid) : null
   );
 
   useEffect(() => {
-    // Simplified onAuthStateChanged
+    // Check for a quiz ID in the URL on initial load
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('quizId');
+    if (code) {
+      setQuizId(code);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
@@ -32,9 +40,22 @@ function App() {
   const isLoading = authLoading || (user && !user.isAnonymous && profileLoading);
 
   if (isLoading) {
-    return <div className="loading-screen"><h1>Loading Your Workspace...</h1></div>;
+    return <div className="loading-screen"><h1>Loading...</h1></div>;
   }
 
+  const renderContent = () => {
+    // If a quizId is in the URL, show the shared quiz
+    if (quizId) {
+      return <SharedQuiz quizId={quizId} />;
+    }
+    
+    // Otherwise, show the normal app flow
+    if (!user) {
+      return <Auth />;
+    }
+    return <Dashboard user={user} />;
+  };
+  
   return (
     <div className="App">
       <header className="app-header">
@@ -48,7 +69,7 @@ function App() {
       </header>
       
       <main className="app-container">
-        {user ? <Dashboard user={user} userProfile={userProfile} /> : <Auth />}
+        {renderContent()}
       </main>
     </div>
   );

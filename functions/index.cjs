@@ -3,7 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const functions = require("firebase-functions");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { onRequest } = require("firebase-functions/v2/http");
+// ** THE FIX: Changed 'http' to 'https' **
+const { onRequest } = require("firebase-functions/v2/https");
 const { FieldValue } = require("firebase-admin/firestore");
 const quizGenerator = require("./services/quizGenerator.cjs");
 require("dotenv").config();
