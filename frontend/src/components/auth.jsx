@@ -8,7 +8,8 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import './auth.css';
 
-function Auth() {
+// The component now accepts a 'quizIdToTake' prop
+function Auth({ quizIdToTake }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(true);
@@ -18,30 +19,30 @@ function Auth() {
     e.preventDefault();
     setError('');
 
-    // Handle new user sign-up
-    if (isSignUp) {
-      try {
+    try {
+      if (isSignUp) {
+        // --- Sign Up Flow ---
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        // Create a user profile in Firestore
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
-          role: 'user', // All users are standard users now
+          role: 'user',
           createdAt: serverTimestamp()
         });
-      } catch (err) {
-        setError(err.message);
+      } else {
+        // --- Sign In Flow ---
+        await signInWithEmailAndPassword(auth, email, password);
       }
-      return;
-    }
-    
-    // Handle standard sign-in
-    if (!isSignUp) {
-        try {
-            await signInWithEmailAndPassword(auth, email, password);
-        } catch (err) {
-            setError(err.message);
-        }
+
+      // ** THE FIX: Redirect if user came from a share link **
+      if (quizIdToTake) {
+        // Reloading the page is the simplest way to trigger the redirect.
+        // App.jsx will see the user is now logged in and show the quiz.
+        window.location.reload();
+      }
+
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -55,8 +56,9 @@ function Auth() {
     }
   };
   
-  const title = isSignUp ? 'Create Your Account' : 'Welcome Back';
-  const subtitle = isSignUp ? 'Get started with your personal study sidekick.' : 'Sign in to continue.';
+  // Dynamically change titles and subtitles if the user is accepting an invite
+  const title = quizIdToTake ? 'Take the Quiz!' : (isSignUp ? 'Create Your Account' : 'Welcome Back');
+  const subtitle = quizIdToTake ? 'Sign up or log in to start the quiz.' : (isSignUp ? 'Get started with your personal study sidekick.' : 'Sign in to continue.');
 
   return (
     <div className="auth-container">
@@ -78,13 +80,18 @@ function Auth() {
           </button>
         </form>
         
-        <button onClick={handleGuestSignIn} className="guest-button">Try a Demo</button>
-        <div className="toggle-auth">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-            <button onClick={() => setIsSignUp(!isSignUp)} className="toggle-button">
-                {isSignUp ? 'Log In' : 'Sign Up'}
-            </button>
-        </div>
+        {/* Hide guest button when taking a shared quiz */}
+        {!quizIdToTake && (
+          <>
+            <button onClick={handleGuestSignIn} className="guest-button">Try a Demo</button>
+            <div className="toggle-auth">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}
+                <button onClick={() => setIsSignUp(!isSignUp)} className="toggle-button">
+                    {isSignUp ? 'Log In' : 'Sign Up'}
+                </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

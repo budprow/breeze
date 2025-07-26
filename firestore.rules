@@ -3,22 +3,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can create, read, and update their own user profile.
     match /users/{userId} {
       allow create;
       allow read, update: if request.auth.uid == userId;
     }
 
-    // A user can manage their own documents.
     match /documents/{documentId} {
       allow read, write, delete: if request.auth.uid == resource.data.ownerId;
       allow create: if request.auth.uid != null && request.auth.uid == request.resource.data.ownerId;
     }
     
-    // A user can manage their own quizzes.
     match /quizzes/{quizId} {
         allow read, write, delete: if request.auth.uid == resource.data.ownerId;
         allow create: if request.auth.uid != null && request.auth.uid == request.resource.data.ownerId;
+
+        // ** NEW RULE **
+        // Allow any authenticated user to write to the results sub-collection
+        match /results/{resultId} {
+            allow create: if request.auth.uid != null;
+        }
     }
   }
 }

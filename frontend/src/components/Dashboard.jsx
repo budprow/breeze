@@ -10,6 +10,7 @@ import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
 import QuizList from './QuizList';
+import QuizResults from './QuizResults'; // Import the new component
 import './Dashboard.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
@@ -40,6 +41,7 @@ function Dashboard({ user }) {
   const [progress, setProgress] = useState(0);
   const [refinementText, setRefinementText] = useState('');
   const [quizData, setQuizData] = useState(null);
+  const [showResultsModal, setShowResultsModal] = useState(null); // New state for modal
 
   const handleDelete = async (documentToDelete) => {
     if (!window.confirm(`Are you sure you want to delete "${documentToDelete.data().name}"?`)) return;
@@ -186,6 +188,10 @@ function Dashboard({ user }) {
     }
   };
   
+  const handleShowResults = (quiz) => {
+    setShowResultsModal(quiz);
+  };
+  
   if (quizData) {
     return (
       <Quiz
@@ -230,6 +236,11 @@ function Dashboard({ user }) {
   
   return (
     <div className="dashboard-container">
+      {/* The results modal will show here when active */}
+      {showResultsModal && (
+        <QuizResults quiz={showResultsModal} onClose={() => setShowResultsModal(null)} />
+      )}
+
       <div className="dashboard-section">
         <h3>My Training Documents</h3>
         {user.isAnonymous ? (
@@ -268,7 +279,11 @@ function Dashboard({ user }) {
       {!user.isAnonymous && (
         <div className="dashboard-section">
           {/* Pass the new handlers down to the QuizList component */}
-          <QuizList onRetake={handleRetakeQuiz} onRefine={handleRefineQuiz} />
+          <QuizList
+            onRetake={handleRetakeQuiz}
+            onRefine={handleRefineQuiz}
+            onShowResults={handleShowResults}
+          />
         </div>
       )}
     </div>

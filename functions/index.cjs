@@ -3,7 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const functions = require("firebase-functions");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-// ** THE FIX: Changed 'http' to 'https' **
 const { onRequest } = require("firebase-functions/v2/https");
 const { FieldValue } = require("firebase-admin/firestore");
 const quizGenerator = require("./services/quizGenerator.cjs");
@@ -22,7 +21,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
@@ -36,7 +35,6 @@ if (geminiApiKey) {
   console.warn("GEMINI_API_KEY not found. The /generate-quiz endpoint will not work.");
 }
 
-// --- HELPER FUNCTIONS ---
 const verifyFirebaseToken = async (req, res, next) => {
   const idToken = req.headers.authorization?.split("Bearer ")[1];
   if (!idToken) {
@@ -72,28 +70,75 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
-  const db = admin.firestore();
-  const { quizData, score, documentName, documentId } = req.body;
-  const userId = req.user.uid;
+    const db = admin.firestore();
+    const { quizData, score, documentName, documentId } = req.body;
+    const userId = req.user.uid;
+  
+    if (!quizData || score === undefined || !documentName || !documentId) {
+      return res.status(400).send("Missing required quiz data for saving.");
+    }
+  
+    try {
+      await db.collection("quizzes").add({
+        ownerId: userId,
+        documentId: documentId,
+        documentName: documentName,
+        score: score,
+        totalQuestions: quizData.length,
+        quizData: quizData,
+        completedAt: FieldValue.serverTimestamp(),
+      });
+      res.status(201).send("Quiz saved successfully.");
+    } catch (error) {
+      console.error("Error saving quiz:", error);
+      res.status(500).send("Server error while saving quiz.");
+    }
+  });
 
-  if (!quizData || score === undefined || !documentName || !documentId) {
-    return res.status(400).send("Missing required quiz data for saving.");
+// ** NEW ENDPOINT **
+app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
+  const db = admin.firestore();
+  const { quizId, score, quizData } = req.body;
+  const { uid, email } = req.user;
+
+  if (!quizId || score === undefined || !quizData) {
+    return res.status(400).send("Missing required data to save quiz result.");
   }
 
   try {
-    await db.collection("quizzes").add({
-      ownerId: userId,
-      documentId: documentId,
+    const originalQuizRef = doc(db, 'quizzes', quizId);
+    const originalQuizSnap = await getDoc(originalQuizRef);
+
+    if (!originalQuizSnap.exists()) {
+      return res.status(404).send("Original quiz not found.");
+    }
+
+    const documentName = originalQuizSnap.data().documentName;
+
+    // Save result to the original quiz's sub-collection
+    await db.collection('quizzes').doc(quizId).collection('results').add({
+      takerId: uid,
+      takerEmail: email,
+      score: score,
+      completedAt: FieldValue.serverTimestamp()
+    });
+
+    // Save a copy to the quiz taker's own collection
+    await db.collection('quizzes').add({
+      ownerId: uid,
+      documentId: originalQuizSnap.data().documentId,
       documentName: documentName,
       score: score,
       totalQuestions: quizData.length,
       quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
+      originalQuizId: quizId // Link back to the original
     });
-    res.status(201).send("Quiz saved successfully.");
+
+    res.status(201).send("Quiz result saved successfully.");
   } catch (error) {
-    console.error("Error saving quiz:", error);
-    res.status(500).send("Server error while saving quiz.");
+    console.error("Error saving shared quiz result:", error);
+    res.status(500).send("Server error while saving quiz result.");
   }
 });
 

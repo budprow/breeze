@@ -4,7 +4,8 @@ import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import './QuizList.css';
 
-function QuizList({ onRetake, onRefine }) {
+// Add onShowResults to the props
+function QuizList({ onRetake, onRefine, onShowResults }) { 
   const user = auth.currentUser;
   
   const [quizzesValue, quizzesLoading, quizzesError] = useCollection(
@@ -21,7 +22,6 @@ function QuizList({ onRetake, onRefine }) {
     }
   };
 
-  // --- NEW SHARE HANDLER ---
   const handleShare = (quizId) => {
     const shareableLink = `${window.location.origin}?quizId=${quizId}`;
     navigator.clipboard.writeText(shareableLink)
@@ -47,6 +47,7 @@ function QuizList({ onRetake, onRefine }) {
           ) : (
             quizzesValue.docs.map((quiz) => {
               const quizData = quiz.data();
+              const isOriginal = quizData.ownerId === user.uid; // Check if this is the original copy
               return (
                 <li key={quiz.id} className="quiz-item">
                   <div className="quiz-info">
@@ -57,8 +58,13 @@ function QuizList({ onRetake, onRefine }) {
                   <div className="quiz-actions">
                     <button onClick={() => onRetake(quizData.quizData)} className="action-btn retake-btn">Retake</button>
                     <button onClick={() => onRefine(quizData.documentId)} className="action-btn refine-btn">Refine</button>
-                    {/* The handleShare function is now connected */}
-                    <button onClick={() => handleShare(quiz.id)} className="action-btn share-btn">Share</button>
+                    {/* Only show Share and Results for original quizzes */}
+                    {isOriginal && (
+                      <>
+                        <button onClick={() => handleShare(quiz.id)} className="action-btn share-btn">Share</button>
+                        <button onClick={() => onShowResults(quiz)} className="action-btn view-results-btn">Results</button>
+                      </>
+                    )}
                     <button onClick={() => handleDelete(quiz.id)} className="action-btn delete-btn">Delete</button>
                   </div>
                 </li>
