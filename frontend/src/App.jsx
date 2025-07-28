@@ -6,24 +6,24 @@ import { auth, db } from './firebase';
 
 import Auth from './components/auth';
 import Dashboard from './components/Dashboard';
-import SharedQuiz from './SharedQuiz'; // Import the new component
+import SharedQuiz from './SharedQuiz';
 import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [quizId, setQuizId] = useState(null);
+  const [sharedQuizId, setSharedQuizId] = useState(null);
 
   const [userProfile, profileLoading] = useDocumentData(
     user && !user.isAnonymous ? doc(db, 'users', user.uid) : null
   );
 
   useEffect(() => {
-    // Check for a quiz ID in the URL on initial load
+    // On initial load, check the URL for a quizId
     const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('quizId');
-    if (code) {
-      setQuizId(code);
+    const quizIdFromUrl = urlParams.get('quizId');
+    if (quizIdFromUrl) {
+      setSharedQuizId(quizIdFromUrl);
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -34,6 +34,9 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
+    // When logging out, clear the URL and any shared quiz ID
+    window.history.pushState({}, '', '/');
+    setSharedQuizId(null);
     await signOut(auth);
   };
 
@@ -44,16 +47,26 @@ function App() {
   }
 
   const renderContent = () => {
-    // If a quizId is in the URL, show the shared quiz
-    if (quizId) {
-      return <SharedQuiz quizId={quizId} />;
+    // ** THE FIX: This logic ensures correct routing for shared quizzes **
+
+    // 1. If a user is logged in AND there's a sharedQuizId, show the quiz.
+    if (user && sharedQuizId) {
+      return <SharedQuiz quizId={sharedQuizId} />;
     }
     
-    // Otherwise, show the normal app flow
-    if (!user) {
-      return <Auth />;
+    // 2. If there's a sharedQuizId but NO user, show the Auth page.
+    //    We pass the quizId so it knows to redirect after login.
+    if (!user && sharedQuizId) {
+      return <Auth quizIdToTake={sharedQuizId} />;
     }
-    return <Dashboard user={user} />;
+
+    // 3. If there's a user but NO sharedQuizId, show the normal dashboard.
+    if (user) {
+      return <Dashboard user={user} />;
+    }
+    
+    // 4. If no user and no sharedQuizId, show the standard Auth page.
+    return <Auth />;
   };
   
   return (

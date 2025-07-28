@@ -95,7 +95,6 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
     }
   });
 
-// ** NEW ENDPOINT **
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   const db = admin.firestore();
   const { quizId, score, quizData } = req.body;
@@ -106,10 +105,11 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   }
 
   try {
-    const originalQuizRef = doc(db, 'quizzes', quizId);
-    const originalQuizSnap = await getDoc(originalQuizRef);
+    // ** THE FIX: Using the correct Admin SDK syntax to get the document **
+    const originalQuizRef = db.collection('quizzes').doc(quizId);
+    const originalQuizSnap = await originalQuizRef.get();
 
-    if (!originalQuizSnap.exists()) {
+    if (!originalQuizSnap.exists) {
       return res.status(404).send("Original quiz not found.");
     }
 

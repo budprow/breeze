@@ -67,3 +67,7 @@
   color: #888;
   margin-top: 20px;
 }
+
+.view-results-btn {
+  background-color: #6f42c1; /* A distinct purple color */
+}

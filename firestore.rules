@@ -14,10 +14,13 @@ service cloud.firestore {
     }
     
     match /quizzes/{quizId} {
-        allow read, write, delete: if request.auth.uid == resource.data.ownerId;
+        // ** THE FIX: Allow any signed-in user to read quizzes **
+        allow read: if request.auth != null; 
+        
+        // Keep write and delete permissions for the owner only
+        allow write, delete: if request.auth.uid == resource.data.ownerId;
         allow create: if request.auth.uid != null && request.auth.uid == request.resource.data.ownerId;
 
-        // ** NEW RULE **
         // Allow any authenticated user to write to the results sub-collection
         match /results/{resultId} {
             allow create: if request.auth.uid != null;

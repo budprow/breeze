@@ -4,7 +4,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -13,32 +13,64 @@
 
 .modal-content {
   background-color: white;
-  padding: 20px;
+  padding: 25px;
   border-radius: 8px;
   width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  max-width: 600px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.25);
 }
 
 .modal-content h3 {
   margin-top: 0;
   border-bottom: 1px solid #eee;
   padding-bottom: 15px;
+  text-align: center;
 }
 
-.modal-content ul {
+.results-list {
   list-style-type: none;
   padding: 0;
   margin-top: 20px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .result-item {
   display: flex;
   justify-content: space-between;
-  padding: 10px;
+  align-items: center;
+  padding: 12px 8px;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .result-item:last-child {
   border-bottom: none;
+}
+
+.result-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.taker-email {
+  font-weight: bold;
+}
+
+.taker-score {
+  color: #333;
+}
+
+.taker-date {
+  font-size: 0.8em;
+  color: #777;
+}
+
+.details-btn {
+  background-color: #17a2b8; /* Teal */
+}
+
+.close-btn {
+  width: 100%;
+  margin-top: 20px;
+  background-color: #6c757d;
 }
