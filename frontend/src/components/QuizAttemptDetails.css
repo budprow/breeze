@@ -1,0 +1,59 @@
+.modal-content-details {
+  background-color: white;
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 700px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.25);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-content-details h3 {
+  margin-top: 0;
+  text-align: center;
+}
+
+.question-list {
+  overflow-y: auto; /* Make the list of questions scrollable */
+  flex-grow: 1;
+  padding-right: 15px; /* For scrollbar spacing */
+}
+
+.question-details-block {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.question-text-details {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.options-details-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.option-detail {
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+}
+
+.option-detail.correct-answer {
+  background-color: #d4edda; /* Green for correct */
+  border-color: #c3e6cb;
+  font-weight: bold;
+}
+
+.option-detail.incorrect-answer {
+  background-color: #f8d7da; /* Red for user's wrong answer */
+  border-color: #f5c6cb;
+  text-decoration: line-through;
+}

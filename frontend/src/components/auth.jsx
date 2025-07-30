@@ -8,7 +8,6 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import './auth.css';
 
-// The component now accepts a 'quizIdToTake' prop
 function Auth({ quizIdToTake }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,7 +20,6 @@ function Auth({ quizIdToTake }) {
 
     try {
       if (isSignUp) {
-        // --- Sign Up Flow ---
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         await setDoc(doc(db, 'users', user.uid), {
@@ -30,14 +28,10 @@ function Auth({ quizIdToTake }) {
           createdAt: serverTimestamp()
         });
       } else {
-        // --- Sign In Flow ---
         await signInWithEmailAndPassword(auth, email, password);
       }
 
-      // ** THE FIX: Redirect if user came from a share link **
       if (quizIdToTake) {
-        // Reloading the page is the simplest way to trigger the redirect.
-        // App.jsx will see the user is now logged in and show the quiz.
         window.location.reload();
       }
 
@@ -56,9 +50,8 @@ function Auth({ quizIdToTake }) {
     }
   };
   
-  // Dynamically change titles and subtitles if the user is accepting an invite
   const title = quizIdToTake ? 'Take the Quiz!' : (isSignUp ? 'Create Your Account' : 'Welcome Back');
-  const subtitle = quizIdToTake ? 'Sign up or log in to start the quiz.' : (isSignUp ? 'Get started with your personal study sidekick.' : 'Sign in to continue.');
+  const subtitle = quizIdToTake ? 'Sign up or log in to start.' : (isSignUp ? 'Get started with your personal study sidekick.' : 'Sign in to continue.');
 
   return (
     <div className="auth-container">
@@ -80,18 +73,16 @@ function Auth({ quizIdToTake }) {
           </button>
         </form>
         
-        {/* Hide guest button when taking a shared quiz */}
+        {/* THE FIX: Always show the toggle, but hide the guest button for shared quizzes */}
         {!quizIdToTake && (
-          <>
-            <button onClick={handleGuestSignIn} className="guest-button">Try a Demo</button>
-            <div className="toggle-auth">
-                {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-                <button onClick={() => setIsSignUp(!isSignUp)} className="toggle-button">
-                    {isSignUp ? 'Log In' : 'Sign Up'}
-                </button>
-            </div>
-          </>
+          <button onClick={handleGuestSignIn} className="guest-button">Try a Demo</button>
         )}
+        <div className="toggle-auth">
+            {isSignUp ? 'Already have an account?' : "Don't have an account?"}
+            <button onClick={() => setIsSignUp(!isSignUp)} className="toggle-button">
+                {isSignUp ? 'Log In' : 'Sign Up'}
+            </button>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, doc, deleteDoc, where, getDoc } from 'firebase/firestore'; // Import getDoc
+import { collection, query, doc, deleteDoc, where, getDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
@@ -10,7 +10,8 @@ import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import PdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
 import QuizList from './QuizList';
-import QuizResults from './QuizResults'; // Import the new component
+import QuizResults from './QuizResults';
+import QuizAttemptDetails from './QuizAttemptDetails';
 import './Dashboard.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
@@ -41,7 +42,8 @@ function Dashboard({ user }) {
   const [progress, setProgress] = useState(0);
   const [refinementText, setRefinementText] = useState('');
   const [quizData, setQuizData] = useState(null);
-  const [showResultsModal, setShowResultsModal] = useState(null); // New state for modal
+  const [showResultsModal, setShowResultsModal] = useState(null);
+  const [viewingDetailsFor, setViewingDetailsFor] = useState(null);
 
   const handleDelete = async (documentToDelete) => {
     if (!window.confirm(`Are you sure you want to delete "${documentToDelete.data().name}"?`)) return;
@@ -144,7 +146,8 @@ function Dashboard({ user }) {
     setRefinementText('');
   };
 
-  const handleSaveAndExit = async (score) => {
+  // THE FIX: This now correctly accepts 'answers' from the Quiz component
+  const handleSaveAndExit = async (score, answers) => {
     if (!quizData || !selectedDoc) return;
     try {
       await api.post('/save-quiz', {
@@ -152,6 +155,7 @@ function Dashboard({ user }) {
         score: score,
         documentName: selectedDoc.data().name,
         documentId: selectedDoc.id,
+        answers: answers // And passes them to the API
       });
       alert("Quiz saved!");
     } catch (error) {
@@ -169,18 +173,14 @@ function Dashboard({ user }) {
     resetToDashboard();
   };
 
-  // --- NEW HANDLERS FOR QUIZ LIST ---
   const handleRetakeQuiz = (savedQuizData) => {
-    // We already have the quiz questions, so just set the state
     setQuizData(savedQuizData);
   };
 
   const handleRefineQuiz = async (documentId) => {
-    // Find the original document from the documentId
     const docRef = doc(db, 'documents', documentId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      // Set it as the selected document and enter the refinement flow
       setSelectedDoc(docSnap);
     } else {
       console.error("Original document not found for this quiz.");
@@ -190,6 +190,10 @@ function Dashboard({ user }) {
   
   const handleShowResults = (quiz) => {
     setShowResultsModal(quiz);
+  };
+
+  const handleViewDetails = (result) => {
+    setViewingDetailsFor(result);
   };
   
   if (quizData) {
@@ -236,9 +240,20 @@ function Dashboard({ user }) {
   
   return (
     <div className="dashboard-container">
-      {/* The results modal will show here when active */}
-      {showResultsModal && (
-        <QuizResults quiz={showResultsModal} onClose={() => setShowResultsModal(null)} />
+      {showResultsModal && !viewingDetailsFor && (
+        <QuizResults
+          quiz={showResultsModal}
+          onViewDetails={handleViewDetails}
+          onClose={() => setShowResultsModal(null)}
+        />
+      )}
+
+      {showResultsModal && viewingDetailsFor && (
+        <QuizAttemptDetails
+          result={viewingDetailsFor}
+          quizData={showResultsModal.data()}
+          onClose={() => setViewingDetailsFor(null)}
+        />
       )}
 
       <div className="dashboard-section">
@@ -278,7 +293,6 @@ function Dashboard({ user }) {
 
       {!user.isAnonymous && (
         <div className="dashboard-section">
-          {/* Pass the new handlers down to the QuizList component */}
           <QuizList
             onRetake={handleRetakeQuiz}
             onRefine={handleRefineQuiz}

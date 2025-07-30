@@ -70,46 +70,47 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
-    const db = admin.firestore();
-    const { quizData, score, documentName, documentId } = req.body;
-    const userId = req.user.uid;
-  
-    if (!quizData || score === undefined || !documentName || !documentId) {
-      return res.status(400).send("Missing required quiz data for saving.");
-    }
-  
-    try {
-      await db.collection("quizzes").add({
-        ownerId: userId,
-        documentId: documentId,
-        documentName: documentName,
-        score: score,
-        totalQuestions: quizData.length,
-        quizData: quizData,
-        completedAt: FieldValue.serverTimestamp(),
-      });
-      res.status(201).send("Quiz saved successfully.");
-    } catch (error) {
-      console.error("Error saving quiz:", error);
-      res.status(500).send("Server error while saving quiz.");
-    }
-  });
+  const db = admin.firestore();
+  // ** THE FIX: Added 'answers' to be received from the frontend **
+  const { quizData, score, documentName, documentId, answers } = req.body;
+  const userId = req.user.uid;
+
+  if (!quizData || score === undefined || !documentName || !documentId || !answers) {
+    return res.status(400).send("Missing required quiz data for saving.");
+  }
+
+  try {
+    await db.collection("quizzes").add({
+      ownerId: userId,
+      documentId: documentId,
+      documentName: documentName,
+      score: score,
+      totalQuestions: quizData.length,
+      quizData: quizData,
+      completedAt: FieldValue.serverTimestamp(),
+      answers: answers // ** THE FIX: Save the answers object **
+    });
+    res.status(201).send("Quiz saved successfully.");
+  } catch (error) {
+    console.error("Error saving quiz:", error);
+    res.status(500).send("Server error while saving quiz.");
+  }
+});
 
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   const db = admin.firestore();
-  const { quizId, score, quizData } = req.body;
+  const { quizId, score, quizData, answers } = req.body;
   const { uid, email } = req.user;
 
-  if (!quizId || score === undefined || !quizData) {
+  if (!quizId || score === undefined || !quizData || !answers) {
     return res.status(400).send("Missing required data to save quiz result.");
   }
 
   try {
-    // ** THE FIX: Using the correct Admin SDK syntax to get the document **
     const originalQuizRef = db.collection('quizzes').doc(quizId);
     const originalQuizSnap = await originalQuizRef.get();
 
-    if (!originalQuizSnap.exists) {
+    if (!originalQuizSnap.exists()) {
       return res.status(404).send("Original quiz not found.");
     }
 
@@ -120,7 +121,8 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
       takerId: uid,
       takerEmail: email,
       score: score,
-      completedAt: FieldValue.serverTimestamp()
+      completedAt: FieldValue.serverTimestamp(),
+      answers: answers
     });
 
     // Save a copy to the quiz taker's own collection
@@ -132,7 +134,8 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
       totalQuestions: quizData.length,
       quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
-      originalQuizId: quizId // Link back to the original
+      originalQuizId: quizId,
+      answers: answers
     });
 
     res.status(201).send("Quiz result saved successfully.");

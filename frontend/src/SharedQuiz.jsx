@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import Quiz from './Quiz';
-import api from './api'; // Import api
+import api from './api';
 import './Quiz.css';
 
 function SharedQuiz({ quizId }) {
@@ -12,40 +12,40 @@ function SharedQuiz({ quizId }) {
 
   useEffect(() => {
     const fetchQuiz = async () => {
-        if (!quizId) {
-            setError('No quiz ID provided.');
-            setLoading(false);
-            return;
-          }
-          try {
-            const quizRef = doc(db, 'quizzes', quizId);
-            const docSnap = await getDoc(quizRef);
-            if (docSnap.exists()) {
-              setQuizData(docSnap.data().quizData);
-            } else {
-              setError('Quiz not found. The link may be invalid or the quiz may have been deleted.');
-            }
-          } catch (err) {
-            console.error("Error fetching shared quiz:", err);
-            setError('An error occurred while loading the quiz.');
-          } finally {
-            setLoading(false);
-          }
+      if (!quizId) {
+        setError('No quiz ID provided.');
+        setLoading(false);
+        return;
+      }
+      try {
+        const quizRef = doc(db, 'quizzes', quizId);
+        const docSnap = await getDoc(quizRef);
+        if (docSnap.exists()) {
+          setQuizData(docSnap.data().quizData);
+        } else {
+          setError('Quiz not found. The link may be invalid or the quiz may have been deleted.');
+        }
+      } catch (err) {
+        console.error("Error fetching shared quiz:", err);
+        setError('An error occurred while loading the quiz.');
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchQuiz();
   }, [quizId]);
 
-  // ** NEW HANDLER **
-  const handleSaveSharedQuiz = async (score) => {
+  const handleSaveSharedQuiz = async (score, answers) => {
     try {
       await api.post('/save-shared-quiz-result', {
         quizId: quizId,
         score: score,
-        quizData: quizData
+        quizData: quizData,
+        answers: answers
       });
       alert("Your results have been saved!");
-      window.location.href = '/'; // Redirect to dashboard
+      window.location.href = '/';
     } catch (err) {
       console.error("Error saving shared quiz result:", err);
       alert("Could not save your quiz result.");
@@ -55,6 +55,7 @@ function SharedQuiz({ quizId }) {
   if (loading) {
     return <div className="loading-screen"><h1>Loading Quiz...</h1></div>;
   }
+
   if (error) {
     return <div className="quiz-container results-screen"><h2>Error</h2><p>{error}</p></div>;
   }
@@ -64,9 +65,9 @@ function SharedQuiz({ quizId }) {
       {quizData ? (
         <Quiz
           quizData={quizData}
-          onSaveAndExit={handleSaveSharedQuiz} // Use the new handler
+          onSaveAndExit={handleSaveSharedQuiz}
           onRegenerate={() => {}} 
-          onExitWithoutSaving={() => window.location.href = '/'} // Just redirect
+          onExitWithoutSaving={() => window.location.href = '/'}
           refinementText=""
           setRefinementText={() => {}}
         />

@@ -14,6 +14,7 @@ function Quiz({
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  const [userAnswers, setUserAnswers] = useState({});
   const currentQuestion = quizData[currentQuestionIndex];
 
   const handleAnswerSelect = (option) => {
@@ -26,6 +27,8 @@ function Quiz({
       alert("Please select an answer!");
       return;
     }
+
+    setUserAnswers(prev => ({...prev, [currentQuestionIndex]: selectedAnswer}));
 
     if (selectedAnswer === currentQuestion.correctAnswer) {
       setScore(prevScore => prevScore + 1);
@@ -44,14 +47,12 @@ function Quiz({
     }
   };
 
-  // --- NEW "Quiz Complete!" Screen ---
   if (showResults) {
     return (
       <div className="quiz-container results-screen">
         <h2>Quiz Complete!</h2>
         <p className="final-score">Your Score: {score} out of {quizData.length}</p>
 
-        {/* Path B: Refine and Regenerate */}
         <div className="refinement-container">
           <label htmlFor="refinementInput">Refine your quiz with new instructions:</label>
           <textarea
@@ -67,12 +68,11 @@ function Quiz({
         </div>
 
         <div className="results-actions">
-          {/* Path A: Save and Exit */}
-          <button onClick={() => onSaveAndExit(score)} className="action-button save-exit-button">
+          {/* THE FIX: This now correctly passes the userAnswers every time */}
+          <button onClick={() => onSaveAndExit(score, userAnswers)} className="action-button save-exit-button">
             Save and Return to Dashboard
           </button>
           
-          {/* Path C: Exit without Saving */}
           <button onClick={onExitWithoutSaving} className="action-button exit-only-button">
             Return to Dashboard (Don't Save)
           </button>
