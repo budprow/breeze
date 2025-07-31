@@ -10,21 +10,12 @@ require("dotenv").config();
 
 // --- INITIALIZATION ---
 admin.initializeApp();
+const db = admin.firestore();
 const app = express();
 
 // --- MIDDLEWARE ---
-const corsOptions = {
-  origin: ["http://localhost:5173", "https://breeze-omega.vercel.app"],
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  optionsSuccessStatus: 204
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-
+app.use(cors({ origin: true }));
 app.use(express.json());
-
 
 // --- GEMINI AI SETUP ---
 const geminiApiKey = process.env.GEMINI_API_KEY || (functions.config().gemini && functions.config().gemini.key);
@@ -49,7 +40,7 @@ const verifyFirebaseToken = async (req, res, next) => {
   }
 };
 
-// --- API ROUTES ---
+// --- QUIZ ROUTES ---
 
 app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   if (!genAI) {
@@ -70,8 +61,6 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
-  const db = admin.firestore();
-  // ** THE FIX: Added 'answers' to be received from the frontend **
   const { quizData, score, documentName, documentId, answers } = req.body;
   const userId = req.user.uid;
 
@@ -88,7 +77,7 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
       totalQuestions: quizData.length,
       quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
-      answers: answers // ** THE FIX: Save the answers object **
+      answers: answers
     });
     res.status(201).send("Quiz saved successfully.");
   } catch (error) {
@@ -98,7 +87,6 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
-  const db = admin.firestore();
   const { quizId, score, quizData, answers } = req.body;
   const { uid, email } = req.user;
 
@@ -110,7 +98,8 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
     const originalQuizRef = db.collection('quizzes').doc(quizId);
     const originalQuizSnap = await originalQuizRef.get();
 
-    if (!originalQuizSnap.exists()) {
+    // ** THE FIX: Changed originalQuizSnap.exists() to originalQuizSnap.exists **
+    if (!originalQuizSnap.exists) {
       return res.status(404).send("Original quiz not found.");
     }
 
@@ -137,13 +126,33 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
       originalQuizId: quizId,
       answers: answers
     });
-
     res.status(201).send("Quiz result saved successfully.");
   } catch (error) {
     console.error("Error saving shared quiz result:", error);
     res.status(500).send("Server error while saving quiz result.");
   }
 });
+
+// --- INVITE ROUTES ---
+
+app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
+    const { restaurantId } = req.body;
+    const managerId = req.user.uid;
+    if (!restaurantId || !managerId) {
+        return res.status(400).send('Missing restaurantId or managerId.');
+    }
+    try {
+      const inviteRef = await db.collection('restaurants').doc(restaurantId).collection('invites').add({
+        createdAt: FieldValue.serverTimestamp(),
+        used: false,
+        createdBy: managerId,
+      });
+      res.status(201).json({ inviteCode: inviteRef.id });
+    } catch (error) {
+      console.error("Error creating invite:", error);
+      res.status(500).send('Server error while creating invite.');
+    }
+  });
 
 
 // --- CLOUD FUNCTION EXPORTS ---

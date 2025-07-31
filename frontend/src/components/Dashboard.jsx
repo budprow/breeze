@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, doc, deleteDoc, where, getDoc } from 'firebase/firestore';
+// ** THE FIX: Add getDocs and limit to the import **
+import { collection, query, doc, deleteDoc, where, getDoc, getDocs, limit } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
@@ -146,7 +147,6 @@ function Dashboard({ user }) {
     setRefinementText('');
   };
 
-  // THE FIX: This now correctly accepts 'answers' from the Quiz component
   const handleSaveAndExit = async (score, answers) => {
     if (!quizData || !selectedDoc) return;
     try {
@@ -155,7 +155,7 @@ function Dashboard({ user }) {
         score: score,
         documentName: selectedDoc.data().name,
         documentId: selectedDoc.id,
-        answers: answers // And passes them to the API
+        answers: answers
       });
       alert("Quiz saved!");
     } catch (error) {
@@ -172,9 +172,17 @@ function Dashboard({ user }) {
   const handleExitWithoutSaving = () => {
     resetToDashboard();
   };
-
-  const handleRetakeQuiz = (savedQuizData) => {
-    setQuizData(savedQuizData);
+    
+  const handleRetakeQuiz = (quizToRetake) => {
+    const quizDataFromList = quizToRetake.data();
+    const mockDocument = {
+      id: quizDataFromList.documentId,
+      data: () => ({
+        name: quizDataFromList.documentName,
+      }),
+    };
+    setSelectedDoc(mockDocument);
+    setQuizData(quizDataFromList.quizData);
   };
 
   const handleRefineQuiz = async (documentId) => {
@@ -188,14 +196,34 @@ function Dashboard({ user }) {
     }
   };
   
-  const handleShowResults = (quiz) => {
-    setShowResultsModal(quiz);
-  };
-
   const handleViewDetails = (result) => {
     setViewingDetailsFor(result);
   };
-  
+
+  // This function is for anyone to see a detailed review of a specific attempt
+  const handleReviewAttempt = (quiz) => {
+    const resultData = {
+      ...quiz.data(),
+      takerEmail: user.email,
+    };
+    setShowResultsModal(quiz);
+    setViewingDetailsFor(resultData);
+  };
+
+  // ** THE FIX: This function now smartly decides what to show **
+  const handleShowResults = async (quiz) => {
+    const resultsRef = collection(db, 'quizzes', quiz.id, 'results');
+    const resultsSnap = await getDocs(query(resultsRef, limit(1)));
+
+    // If there are no results in the sub-collection, just show the user's own attempt.
+    if (resultsSnap.empty) {
+      handleReviewAttempt(quiz);
+    } else {
+      // Otherwise, show the list of all results.
+      setShowResultsModal(quiz);
+    }
+  };
+
   if (quizData) {
     return (
       <Quiz
@@ -252,7 +280,10 @@ function Dashboard({ user }) {
         <QuizAttemptDetails
           result={viewingDetailsFor}
           quizData={showResultsModal.data()}
-          onClose={() => setViewingDetailsFor(null)}
+          onClose={() => {
+            setViewingDetailsFor(null);
+            setShowResultsModal(null);
+          }}
         />
       )}
 
@@ -297,6 +328,7 @@ function Dashboard({ user }) {
             onRetake={handleRetakeQuiz}
             onRefine={handleRefineQuiz}
             onShowResults={handleShowResults}
+            onReview={handleReviewAttempt}
           />
         </div>
       )}

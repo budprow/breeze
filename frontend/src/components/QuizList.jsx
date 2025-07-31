@@ -4,8 +4,7 @@ import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import './QuizList.css';
 
-// Add onShowResults to the props
-function QuizList({ onRetake, onRefine, onShowResults }) { 
+function QuizList({ onRetake, onRefine, onShowResults, onReview }) { 
   const user = auth.currentUser;
   
   const [quizzesValue, quizzesLoading, quizzesError] = useCollection(
@@ -47,7 +46,7 @@ function QuizList({ onRetake, onRefine, onShowResults }) {
           ) : (
             quizzesValue.docs.map((quiz) => {
               const quizData = quiz.data();
-              const isOriginal = quizData.ownerId === user.uid; // Check if this is the original copy
+              const isOriginal = !quizData.originalQuizId;
               return (
                 <li key={quiz.id} className="quiz-item">
                   <div className="quiz-info">
@@ -56,15 +55,21 @@ function QuizList({ onRetake, onRefine, onShowResults }) {
                     <p className="quiz-date">Completed: {new Date(quizData.completedAt?.toDate()).toLocaleDateString()}</p>
                   </div>
                   <div className="quiz-actions">
-                    <button onClick={() => onRetake(quizData.quizData)} className="action-btn retake-btn">Retake</button>
+                    <button onClick={() => onRetake(quiz)} className="action-btn retake-btn">Retake</button>
                     <button onClick={() => onRefine(quizData.documentId)} className="action-btn refine-btn">Refine</button>
-                    {/* Only show Share and Results for original quizzes */}
-                    {isOriginal && (
+                    
+                    {/* ** THE FIX: Logic for creator vs. taker buttons ** */}
+                    {isOriginal ? (
+                      // If the user created this quiz:
                       <>
                         <button onClick={() => handleShare(quiz.id)} className="action-btn share-btn">Share</button>
                         <button onClick={() => onShowResults(quiz)} className="action-btn view-results-btn">Results</button>
                       </>
+                    ) : (
+                      // If the user took this quiz from a link:
+                      <button onClick={() => onReview(quiz)} className="action-btn view-results-btn">Results</button>
                     )}
+                    
                     <button onClick={() => handleDelete(quiz.id)} className="action-btn delete-btn">Delete</button>
                   </div>
                 </li>

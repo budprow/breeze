@@ -14,16 +14,15 @@ service cloud.firestore {
     }
     
     match /quizzes/{quizId} {
-        // ** THE FIX: Allow any signed-in user to read quizzes **
-        allow read: if request.auth != null; 
-        
-        // Keep write and delete permissions for the owner only
+        allow read: if request.auth != null;
         allow write, delete: if request.auth.uid == resource.data.ownerId;
         allow create: if request.auth.uid != null && request.auth.uid == request.resource.data.ownerId;
-
-        // Allow any authenticated user to write to the results sub-collection
+        
         match /results/{resultId} {
             allow create: if request.auth.uid != null;
+            
+            // ** THE FIX: Allow the quiz owner OR the result taker to read **
+            allow read: if get(/databases/$(database)/documents/quizzes/$(quizId)).data.ownerId == request.auth.uid || resource.data.takerId == request.auth.uid;
         }
     }
   }

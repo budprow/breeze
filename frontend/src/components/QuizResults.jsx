@@ -5,9 +5,17 @@ import { db } from '../firebase';
 import './QuizResults.css';
 
 function QuizResults({ quiz, onViewDetails, onClose }) {
-  // Query the results sub-collection for the specific quiz
-  const resultsRef = collection(db, 'quizzes', quiz.id, 'results');
+  // ** THE FIX: Determine which quiz ID to use for fetching results **
+  // If the quiz has an originalQuizId, it's a copy taken by the user.
+  // We need to fetch results from the *original* quiz document.
+  const resultsQuizId = quiz.data().originalQuizId || quiz.id;
+
+  const resultsRef = collection(db, 'quizzes', resultsQuizId, 'results');
   const [resultsValue, resultsLoading, resultsError] = useCollection(query(resultsRef, orderBy('completedAt', 'desc')));
+
+  const takerQuizData = quiz.data();
+  // Check if the current quiz being viewed is a taker's copy.
+  const isTakerCopy = !!takerQuizData.originalQuizId;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -17,7 +25,23 @@ function QuizResults({ quiz, onViewDetails, onClose }) {
         {resultsError && <p>Error loading results.</p>}
         {resultsValue && (
           <ul className="results-list">
-            {resultsValue.docs.length === 0 ? (
+            {/* ** THE FIX: If this is a taker's copy, display their result first ** */}
+            {isTakerCopy && (
+              <li key="my-result" className="result-item my-result">
+                <div className="result-info">
+                  <span className="taker-email">My Result</span>
+                  <span className="taker-score">Score: {takerQuizData.score}/{takerQuizData.totalQuestions}</span>
+                  <span className="taker-date">
+                    {new Date(takerQuizData.completedAt?.toDate()).toLocaleString()}
+                  </span>
+                </div>
+                <button onClick={() => onViewDetails(takerQuizData)} className="action-btn details-btn">
+                  View Details
+                </button>
+              </li>
+            )}
+
+            {resultsValue.docs.length === 0 && !isTakerCopy ? (
               <p>No one has taken this quiz yet.</p>
             ) : (
               resultsValue.docs.map(doc => {
