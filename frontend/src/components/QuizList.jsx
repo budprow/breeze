@@ -4,7 +4,7 @@ import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import './QuizList.css';
 
-function QuizList({ onRetake, onRefine, onShowResults, onReview }) { 
+function QuizList({ onRetake, onRefine, onShowResults, onShare }) { 
   const user = auth.currentUser;
   
   const [quizzesValue, quizzesLoading, quizzesError] = useCollection(
@@ -19,19 +19,6 @@ function QuizList({ onRetake, onRefine, onShowResults, onReview }) {
       console.error("Error deleting quiz:", error);
       alert("Failed to delete quiz.");
     }
-  };
-
-  const handleShare = (quizId) => {
-    const shareableLink = `${window.location.origin}?quizId=${quizId}`;
-    navigator.clipboard.writeText(shareableLink)
-      .then(() => {
-        alert("Shareable link copied to clipboard!");
-      })
-      .catch(err => {
-        console.error('Could not copy text: ', err);
-        alert('Failed to copy link. You can manually copy it from the console.');
-        console.log("Here is your shareable link:", shareableLink);
-      });
   };
 
   return (
@@ -56,17 +43,15 @@ function QuizList({ onRetake, onRefine, onShowResults, onReview }) {
                   </div>
                   <div className="quiz-actions">
                     <button onClick={() => onRetake(quiz)} className="action-btn retake-btn">Retake</button>
+                    <button onClick={() => onRefine(quizData.documentId)} className="action-btn refine-btn">Refine</button>
                     
-                    {/* ** THE FIX: Only show Refine, Share, and Results to the original creator ** */}
                     {isOriginal ? (
                       <>
-                        <button onClick={() => onRefine(quizData.documentId)} className="action-btn refine-btn">Refine</button>
-                        <button onClick={() => handleShare(quiz.id)} className="action-btn share-btn">Share</button>
+                        <button onClick={() => onShare(quiz)} className="action-btn share-btn">Share</button>
                         <button onClick={() => onShowResults(quiz)} className="action-btn view-results-btn">Results</button>
                       </>
                     ) : (
-                      // Takers will only see a "Results" button to review their attempt
-                      <button onClick={() => onReview(quiz)} className="action-btn view-results-btn">Results</button>
+                      <button onClick={() => onShowResults(quiz)} className="action-btn view-results-btn">Results</button>
                     )}
                     
                     <button onClick={() => handleDelete(quiz.id)} className="action-btn delete-btn">Delete</button>

@@ -2,15 +2,19 @@ import React from 'react';
 import './QuizAttemptDetails.css';
 
 function QuizAttemptDetails({ result, quizData, onClose }) {
+  // The 'result' object now contains its own 'answers' and 'score'
+  const userAnswers = result.answers || {};
+  const totalQuestions = quizData.quizData.length;
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content-details" onClick={(e) => e.stopPropagation()}>
         <h3>Quiz Details for {result.takerEmail}</h3>
-        <p>Final Score: {result.score}/{quizData.totalQuestions}</p>
+        <p>Final Score: {result.score}/{totalQuestions}</p>
         
         <div className="question-list">
           {quizData.quizData.map((question, index) => {
-            const userAnswer = result.answers[index];
+            const userAnswer = userAnswers[index];
             const isCorrect = userAnswer === question.correctAnswer;
 
             return (

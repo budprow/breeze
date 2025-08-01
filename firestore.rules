@@ -20,8 +20,6 @@ service cloud.firestore {
         
         match /results/{resultId} {
             allow create: if request.auth.uid != null;
-            
-            // ** THE FIX: Allow the quiz owner OR the result taker to read **
             allow read: if get(/databases/$(database)/documents/quizzes/$(quizId)).data.ownerId == request.auth.uid || resource.data.takerId == request.auth.uid;
         }
     }

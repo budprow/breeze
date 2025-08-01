@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './Quiz.css';
 
 function Quiz({
@@ -7,7 +7,8 @@ function Quiz({
   onRegenerate,
   onExitWithoutSaving,
   refinementText,
-  setRefinementText
+  setRefinementText,
+  onQuizStart
 }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -16,6 +17,12 @@ function Quiz({
   const [showResults, setShowResults] = useState(false);
   const [userAnswers, setUserAnswers] = useState({});
   const currentQuestion = quizData[currentQuestionIndex];
+
+  useEffect(() => {
+    if (onQuizStart) {
+      onQuizStart();
+    }
+  }, [onQuizStart]);
 
   const handleAnswerSelect = (option) => {
     if (isAnswered) return;
@@ -68,7 +75,6 @@ function Quiz({
         </div>
 
         <div className="results-actions">
-          {/* THE FIX: This now correctly passes the userAnswers every time */}
           <button onClick={() => onSaveAndExit(score, userAnswers)} className="action-button save-exit-button">
             Save and Return to Dashboard
           </button>

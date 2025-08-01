@@ -1,69 +1,87 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, orderBy, where } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 import './QuizResults.css';
 
 function QuizResults({ quiz, onViewDetails, onClose }) {
-  // ** THE FIX: Determine which quiz ID to use for fetching results **
-  // If the quiz has an originalQuizId, it's a copy taken by the user.
-  // We need to fetch results from the *original* quiz document.
+  const [openDropdown, setOpenDropdown] = useState(null);
+
   const resultsQuizId = quiz.data().originalQuizId || quiz.id;
+  const isTakerCopy = !!quiz.data().originalQuizId;
+  const currentUser = auth.currentUser;
 
   const resultsRef = collection(db, 'quizzes', resultsQuizId, 'results');
-  const [resultsValue, resultsLoading, resultsError] = useCollection(query(resultsRef, orderBy('completedAt', 'desc')));
+  let resultsQuery = query(resultsRef, orderBy('completedAt', 'desc'));
+  
+  // If the user is a taker viewing their own results, only fetch their attempts
+  if (isTakerCopy) {
+    resultsQuery = query(resultsQuery, where('takerId', '==', currentUser.uid));
+  }
 
-  const takerQuizData = quiz.data();
-  // Check if the current quiz being viewed is a taker's copy.
-  const isTakerCopy = !!takerQuizData.originalQuizId;
+  const [resultsValue, resultsLoading, resultsError] = useCollection(resultsQuery);
+
+  const groupedResults = resultsValue?.docs.reduce((acc, doc) => {
+    const result = { id: doc.id, ...doc.data() };
+    const takerEmail = result.takerEmail;
+    if (!acc[takerEmail]) {
+      acc[takerEmail] = [];
+    }
+    acc[takerEmail].push(result);
+    return acc;
+  }, {});
+
+  const formatDuration = (seconds) => {
+    if (seconds === undefined) return 'N/A';
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  };
+
+  const toggleDropdown = (email) => {
+    setOpenDropdown(openDropdown === email ? null : email);
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h3>Results for "{quiz.data().documentName}"</h3>
         {resultsLoading && <p>Loading results...</p>}
-        {resultsError && <p>Error loading results.</p>}
-        {resultsValue && (
-          <ul className="results-list">
-            {/* ** THE FIX: If this is a taker's copy, display their result first ** */}
-            {isTakerCopy && (
-              <li key="my-result" className="result-item my-result">
-                <div className="result-info">
-                  <span className="taker-email">My Result</span>
-                  <span className="taker-score">Score: {takerQuizData.score}/{takerQuizData.totalQuestions}</span>
-                  <span className="taker-date">
-                    {new Date(takerQuizData.completedAt?.toDate()).toLocaleString()}
-                  </span>
+        {resultsError && <p>Error loading results: {resultsError.message}</p>}
+        
+        <div className="results-list">
+          {groupedResults && Object.keys(groupedResults).length === 0 ? (
+            <p>No one has taken this quiz yet.</p>
+          ) : (
+            groupedResults && Object.entries(groupedResults).map(([email, attempts]) => (
+              <div key={email} className="result-group">
+                <div className="result-group-header" onClick={() => toggleDropdown(email)}>
+                  <span>{isTakerCopy ? "My Attempts" : email}</span>
+                  <span className={`dropdown-arrow ${openDropdown === email ? 'open' : ''}`}>▼</span>
                 </div>
-                <button onClick={() => onViewDetails(takerQuizData)} className="action-btn details-btn">
-                  View Details
-                </button>
-              </li>
-            )}
-
-            {resultsValue.docs.length === 0 && !isTakerCopy ? (
-              <p>No one has taken this quiz yet.</p>
-            ) : (
-              resultsValue.docs.map(doc => {
-                const result = doc.data();
-                return (
-                  <li key={doc.id} className="result-item">
-                    <div className="result-info">
-                      <span className="taker-email">{result.takerEmail}</span>
-                      <span className="taker-score">Score: {result.score}/{quiz.data().totalQuestions}</span>
-                      <span className="taker-date">
-                        {new Date(result.completedAt?.toDate()).toLocaleString()}
-                      </span>
-                    </div>
-                    <button onClick={() => onViewDetails(result)} className="action-btn details-btn">
-                      View Details
-                    </button>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        )}
+                {openDropdown === email && (
+                  <div className="dropdown-content">
+                    {attempts.map(attempt => (
+                      <div key={attempt.id} className="result-item">
+                        <div className="result-info">
+                          <span>Score: {attempt.score}/{attempt.totalQuestions}</span>
+                          <span className="attempt-details">
+                            {new Date(attempt.completedAt.toDate()).toLocaleString()} | Duration: {formatDuration(attempt.duration)}
+                          </span>
+                        </div>
+                        <button onClick={() => onViewDetails(attempt)} className="action-btn details-btn">
+                          View Details
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        
         <button onClick={onClose} className="action-btn close-btn">Close</button>
       </div>
     </div>

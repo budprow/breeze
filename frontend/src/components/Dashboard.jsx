@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-// ** THE FIX: Add getDocs and limit to the import **
-import { collection, query, doc, deleteDoc, where, getDoc, getDocs, limit } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, where, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
@@ -13,6 +12,7 @@ import Tesseract from 'tesseract.js';
 import QuizList from './QuizList';
 import QuizResults from './QuizResults';
 import QuizAttemptDetails from './QuizAttemptDetails';
+import ShareQuizModal from './ShareQuizModal';
 import './Dashboard.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfjsWorker;
@@ -45,6 +45,7 @@ function Dashboard({ user }) {
   const [quizData, setQuizData] = useState(null);
   const [showResultsModal, setShowResultsModal] = useState(null);
   const [viewingDetailsFor, setViewingDetailsFor] = useState(null);
+  const [quizToShare, setQuizToShare] = useState(null);
 
   const handleDelete = async (documentToDelete) => {
     if (!window.confirm(`Are you sure you want to delete "${documentToDelete.data().name}"?`)) return;
@@ -195,33 +196,25 @@ function Dashboard({ user }) {
       alert("Could not find the original document to refine this quiz.");
     }
   };
-  
+
+  const handleShareQuiz = (quiz) => {
+    setQuizToShare(quiz);
+  };
+
+  const handleSetAttemptLimit = async (quizId, limit) => {
+    const quizRef = doc(db, 'quizzes', quizId);
+    await updateDoc(quizRef, {
+      attemptLimit: limit
+    });
+  };
+
   const handleViewDetails = (result) => {
     setViewingDetailsFor(result);
   };
 
-  // This function is for anyone to see a detailed review of a specific attempt
-  const handleReviewAttempt = (quiz) => {
-    const resultData = {
-      ...quiz.data(),
-      takerEmail: user.email,
-    };
+  // This one function now handles all "Results" button clicks
+  const handleShowResults = (quiz) => {
     setShowResultsModal(quiz);
-    setViewingDetailsFor(resultData);
-  };
-
-  // ** THE FIX: This function now smartly decides what to show **
-  const handleShowResults = async (quiz) => {
-    const resultsRef = collection(db, 'quizzes', quiz.id, 'results');
-    const resultsSnap = await getDocs(query(resultsRef, limit(1)));
-
-    // If there are no results in the sub-collection, just show the user's own attempt.
-    if (resultsSnap.empty) {
-      handleReviewAttempt(quiz);
-    } else {
-      // Otherwise, show the list of all results.
-      setShowResultsModal(quiz);
-    }
   };
 
   if (quizData) {
@@ -268,6 +261,14 @@ function Dashboard({ user }) {
   
   return (
     <div className="dashboard-container">
+      {quizToShare && (
+        <ShareQuizModal
+          quiz={quizToShare}
+          onShare={handleSetAttemptLimit}
+          onClose={() => setQuizToShare(null)}
+        />
+      )}
+      
       {showResultsModal && !viewingDetailsFor && (
         <QuizResults
           quiz={showResultsModal}
@@ -322,16 +323,14 @@ function Dashboard({ user }) {
         </div>
       </div>
 
-      {!user.isAnonymous && (
-        <div className="dashboard-section">
-          <QuizList
-            onRetake={handleRetakeQuiz}
-            onRefine={handleRefineQuiz}
-            onShowResults={handleShowResults}
-            onReview={handleReviewAttempt}
-          />
-        </div>
-      )}
+      <div className="dashboard-section">
+        <QuizList
+          onRetake={handleRetakeQuiz}
+          onRefine={handleRefineQuiz}
+          onShowResults={handleShowResults}
+          onShare={handleShareQuiz}
+        />
+      </div>
     </div>
   );
 }

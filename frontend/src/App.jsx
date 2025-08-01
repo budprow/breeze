@@ -13,17 +13,22 @@ function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [sharedQuizId, setSharedQuizId] = useState(null);
+  const [attemptLimit, setAttemptLimit] = useState(10);
 
   const [userProfile, profileLoading] = useDocumentData(
     user && !user.isAnonymous ? doc(db, 'users', user.uid) : null
   );
 
   useEffect(() => {
-    // On initial load, check the URL for a quizId
     const urlParams = new URLSearchParams(window.location.search);
     const quizIdFromUrl = urlParams.get('quizId');
+    const limitFromUrl = urlParams.get('limit');
+
     if (quizIdFromUrl) {
       setSharedQuizId(quizIdFromUrl);
+      if (limitFromUrl) {
+        setAttemptLimit(parseInt(limitFromUrl, 10));
+      }
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -34,38 +39,24 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    // When logging out, clear the URL and any shared quiz ID
     window.history.pushState({}, '', '/');
     setSharedQuizId(null);
     await signOut(auth);
   };
 
   const isLoading = authLoading || (user && !user.isAnonymous && profileLoading);
-
-  if (isLoading) {
-    return <div className="loading-screen"><h1>Loading...</h1></div>;
-  }
+  if (isLoading) return <div className="loading-screen"><h1>Loading...</h1></div>;
 
   const renderContent = () => {
-    // ** THE FIX: This logic ensures correct routing for shared quizzes **
-
-    // 1. If a user is logged in AND there's a sharedQuizId, show the quiz.
     if (user && sharedQuizId) {
-      return <SharedQuiz quizId={sharedQuizId} />;
+      return <SharedQuiz quizId={sharedQuizId} attemptLimit={attemptLimit} />;
     }
-    
-    // 2. If there's a sharedQuizId but NO user, show the Auth page.
-    //    We pass the quizId so it knows to redirect after login.
     if (!user && sharedQuizId) {
       return <Auth quizIdToTake={sharedQuizId} />;
     }
-
-    // 3. If there's a user but NO sharedQuizId, show the normal dashboard.
     if (user) {
       return <Dashboard user={user} />;
     }
-    
-    // 4. If no user and no sharedQuizId, show the standard Auth page.
     return <Auth />;
   };
   
@@ -80,7 +71,6 @@ function App() {
           </div>
         )}
       </header>
-      
       <main className="app-container">
         {renderContent()}
       </main>

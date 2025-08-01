@@ -8,16 +8,13 @@ const { FieldValue } = require("firebase-admin/firestore");
 const quizGenerator = require("./services/quizGenerator.cjs");
 require("dotenv").config();
 
-// --- INITIALIZATION ---
 admin.initializeApp();
 const db = admin.firestore();
 const app = express();
 
-// --- MIDDLEWARE ---
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-// --- GEMINI AI SETUP ---
 const geminiApiKey = process.env.GEMINI_API_KEY || (functions.config().gemini && functions.config().gemini.key);
 let genAI;
 if (geminiApiKey) {
@@ -39,8 +36,6 @@ const verifyFirebaseToken = async (req, res, next) => {
     res.status(403).send("Could not verify token");
   }
 };
-
-// --- QUIZ ROUTES ---
 
 app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   if (!genAI) {
@@ -87,53 +82,76 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
-  const { quizId, score, quizData, answers } = req.body;
+  const { quizId, score, quizData, answers, duration } = req.body;
   const { uid, email } = req.user;
 
-  if (!quizId || score === undefined || !quizData || !answers) {
-    return res.status(400).send("Missing required data to save quiz result.");
+  if (!quizId || score === undefined || !quizData || !answers || duration === undefined) {
+    return res.status(400).send("Missing required data.");
   }
 
   try {
     const originalQuizRef = db.collection('quizzes').doc(quizId);
     const originalQuizSnap = await originalQuizRef.get();
 
-    // ** THE FIX: Changed originalQuizSnap.exists() to originalQuizSnap.exists **
     if (!originalQuizSnap.exists) {
       return res.status(404).send("Original quiz not found.");
     }
 
-    const documentName = originalQuizSnap.data().documentName;
+    const quizDocData = originalQuizSnap.data();
+    const limit = quizDocData.attemptLimit || 10;
 
-    // Save result to the original quiz's sub-collection
-    await db.collection('quizzes').doc(quizId).collection('results').add({
+    const resultsRef = originalQuizRef.collection('results');
+    const userAttempts = await resultsRef.where('takerId', '==', uid).get();
+    
+    if (userAttempts.size >= limit) {
+      return res.status(403).send("You have reached the maximum number of attempts.");
+    }
+
+    await resultsRef.add({
       takerId: uid,
       takerEmail: email,
       score: score,
-      completedAt: FieldValue.serverTimestamp(),
-      answers: answers
-    });
-
-    // Save a copy to the quiz taker's own collection
-    await db.collection('quizzes').add({
-      ownerId: uid,
-      documentId: originalQuizSnap.data().documentId,
-      documentName: documentName,
-      score: score,
       totalQuestions: quizData.length,
-      quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
-      originalQuizId: quizId,
-      answers: answers
+      answers: answers,
+      duration: duration
     });
+    
+    const takerQuizQuery = db.collection('quizzes')
+      .where('ownerId', '==', uid)
+      .where('originalQuizId', '==', quizId);
+
+    const takerQuizSnap = await takerQuizQuery.get();
+
+    if (takerQuizSnap.empty) {
+      await db.collection('quizzes').add({
+        ownerId: uid,
+        documentId: quizDocData.documentId,
+        documentName: quizDocData.documentName,
+        score: score,
+        totalQuestions: quizData.length,
+        quizData: quizData,
+        completedAt: FieldValue.serverTimestamp(),
+        originalQuizId: quizId,
+        answers: answers,
+        duration: duration
+      });
+    } else {
+      const takerQuizDocRef = takerQuizSnap.docs[0].ref;
+      await takerQuizDocRef.update({
+        score: score,
+        completedAt: FieldValue.serverTimestamp(),
+        answers: answers,
+        duration: duration
+      });
+    }
+
     res.status(201).send("Quiz result saved successfully.");
   } catch (error) {
     console.error("Error saving shared quiz result:", error);
-    res.status(500).send("Server error while saving quiz result.");
+    res.status(500).send("Could not save your quiz result.");
   }
 });
-
-// --- INVITE ROUTES ---
 
 app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     const { restaurantId } = req.body;
@@ -154,6 +172,4 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     }
   });
 
-
-// --- CLOUD FUNCTION EXPORTS ---
 exports.api = onRequest({ secrets: ["GEMINI_API_KEY"] }, app);
