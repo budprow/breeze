@@ -56,17 +56,16 @@ function QuizList({ onRetake, onRefine, onShowResults, onReview }) {
                   </div>
                   <div className="quiz-actions">
                     <button onClick={() => onRetake(quiz)} className="action-btn retake-btn">Retake</button>
-                    <button onClick={() => onRefine(quizData.documentId)} className="action-btn refine-btn">Refine</button>
                     
-                    {/* ** THE FIX: Logic for creator vs. taker buttons ** */}
+                    {/* ** THE FIX: Only show Refine, Share, and Results to the original creator ** */}
                     {isOriginal ? (
-                      // If the user created this quiz:
                       <>
+                        <button onClick={() => onRefine(quizData.documentId)} className="action-btn refine-btn">Refine</button>
                         <button onClick={() => handleShare(quiz.id)} className="action-btn share-btn">Share</button>
                         <button onClick={() => onShowResults(quiz)} className="action-btn view-results-btn">Results</button>
                       </>
                     ) : (
-                      // If the user took this quiz from a link:
+                      // Takers will only see a "Results" button to review their attempt
                       <button onClick={() => onReview(quiz)} className="action-btn view-results-btn">Results</button>
                     )}
                     
