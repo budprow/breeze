@@ -107,6 +107,7 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
       return res.status(403).send("You have reached the maximum number of attempts.");
     }
 
+    // Always log the new attempt in the creator's results sub-collection
     await resultsRef.add({
       takerId: uid,
       takerEmail: email,
@@ -124,6 +125,7 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
     const takerQuizSnap = await takerQuizQuery.get();
 
     if (takerQuizSnap.empty) {
+      // First attempt: Create the taker's copy
       await db.collection('quizzes').add({
         ownerId: uid,
         documentId: quizDocData.documentId,
@@ -137,6 +139,7 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
         duration: duration
       });
     } else {
+      // Subsequent attempts: Update the existing copy
       const takerQuizDocRef = takerQuizSnap.docs[0].ref;
       await takerQuizDocRef.update({
         score: score,
