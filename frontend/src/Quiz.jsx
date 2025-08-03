@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from './api'; // Import api
 import './Quiz.css';
 
 function Quiz({
@@ -8,7 +9,8 @@ function Quiz({
   onExitWithoutSaving,
   refinementText,
   setRefinementText,
-  onQuizStart
+  onQuizStart,
+  isSharedQuizFlow // ** THE FIX: Receive the new prop **
 }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -16,13 +18,13 @@ function Quiz({
   const [score, setScore] = useState(0);
   const [showResults, setShowResults] = useState(false);
   const [userAnswers, setUserAnswers] = useState({});
+  const [startTime, setStartTime] = useState(null);
   const currentQuestion = quizData[currentQuestionIndex];
 
   useEffect(() => {
-    if (onQuizStart) {
-      onQuizStart();
-    }
-  }, [onQuizStart]);
+    // Start timer for all quiz types
+    setStartTime(Date.now());
+  }, []);
 
   const handleAnswerSelect = (option) => {
     if (isAnswered) return;
@@ -34,9 +36,7 @@ function Quiz({
       alert("Please select an answer!");
       return;
     }
-
     setUserAnswers(prev => ({...prev, [currentQuestionIndex]: selectedAnswer}));
-
     if (selectedAnswer === currentQuestion.correctAnswer) {
       setScore(prevScore => prevScore + 1);
     }
@@ -51,6 +51,27 @@ function Quiz({
       setIsAnswered(false);
     } else {
       setShowResults(true);
+    }
+  };
+
+  // ** THE FIX: A new save handler specifically for shared quiz retakes **
+  const handleSaveSharedQuizRetake = async (currentScore, currentAnswers) => {
+    const endTime = Date.now();
+    const durationInSeconds = Math.round((endTime - startTime) / 1000);
+
+    try {
+      await api.post('/save-shared-quiz-result', {
+        quizId: isSharedQuizFlow.originalQuizId,
+        score: currentScore,
+        quizData: quizData,
+        answers: currentAnswers,
+        duration: durationInSeconds,
+      });
+      alert("Your results have been updated!");
+      onExitWithoutSaving(); // This function now resets state and returns to dashboard
+    } catch (err) {
+      console.error("Error saving shared quiz retake:", err);
+      alert(err.response?.data || "Could not save your quiz result.");
     }
   };
 
@@ -75,7 +96,11 @@ function Quiz({
         </div>
 
         <div className="results-actions">
-          <button onClick={() => onSaveAndExit(score, userAnswers)} className="action-button save-exit-button">
+          {/* ** THE FIX: Conditionally call the correct save function ** */}
+          <button 
+            onClick={() => isSharedQuizFlow ? handleSaveSharedQuizRetake(score, userAnswers) : onSaveAndExit(score, userAnswers)} 
+            className="action-button save-exit-button"
+          >
             Save and Return to Dashboard
           </button>
           
@@ -92,11 +117,9 @@ function Quiz({
       <div className="quiz-header">
         <p>Question {currentQuestionIndex + 1} of {quizData.length}</p>
       </div>
-
       <div className="question-text">
         <p>{currentQuestion.question}</p>
       </div>
-
       <div className="options-container">
         {currentQuestion.options.map((option, index) => {
           let buttonClass = 'option-button';
@@ -109,7 +132,6 @@ function Quiz({
           } else if (option === selectedAnswer) {
             buttonClass += ' selected';
           }
-
           return (
             <button key={index} className={buttonClass} onClick={() => handleAnswerSelect(option)} disabled={isAnswered}>
               {option}
@@ -117,16 +139,11 @@ function Quiz({
           );
         })}
       </div>
-
       <div className="quiz-footer">
         {isAnswered ? (
-            <button onClick={handleNextQuestion} className="next-button">
-              Next
-            </button>
+            <button onClick={handleNextQuestion} className="next-button"> Next </button>
         ) : (
-            <button onClick={handleSubmitAnswer} className="check-button" disabled={selectedAnswer === null}>
-              Check
-            </button>
+            <button onClick={handleSubmitAnswer} className="check-button" disabled={selectedAnswer === null}> Check </button>
         )}
       </div>
     </div>

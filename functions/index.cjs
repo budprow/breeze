@@ -91,68 +91,102 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
 
   try {
     const originalQuizRef = db.collection('quizzes').doc(quizId);
+    const resultsRef = originalQuizRef.collection('results');
+    
     const originalQuizSnap = await originalQuizRef.get();
-
     if (!originalQuizSnap.exists) {
       return res.status(404).send("Original quiz not found.");
     }
 
-    const quizDocData = originalQuizSnap.data();
-    const limit = quizDocData.attemptLimit || 10;
-
-    const resultsRef = originalQuizRef.collection('results');
-    const userAttempts = await resultsRef.where('takerId', '==', uid).get();
-    
-    if (userAttempts.size >= limit) {
-      return res.status(403).send("You have reached the maximum number of attempts.");
-    }
-
-    // Always log the new attempt in the creator's results sub-collection
-    await resultsRef.add({
-      takerId: uid,
-      takerEmail: email,
-      score: score,
-      totalQuestions: quizData.length,
-      completedAt: FieldValue.serverTimestamp(),
-      answers: answers,
-      duration: duration
-    });
-    
     const takerQuizQuery = db.collection('quizzes')
       .where('ownerId', '==', uid)
-      .where('originalQuizId', '==', quizId);
-
+      .where('originalQuizId', '==', quizId)
+      .limit(1);
     const takerQuizSnap = await takerQuizQuery.get();
 
-    if (takerQuizSnap.empty) {
-      // First attempt: Create the taker's copy
-      await db.collection('quizzes').add({
-        ownerId: uid,
-        documentId: quizDocData.documentId,
-        documentName: quizDocData.documentName,
+    await db.runTransaction(async (transaction) => {
+      const quizDocData = originalQuizSnap.data();
+      const limit = quizDocData.attemptLimit || 10;
+      
+      const userAttemptsQuery = resultsRef.where('takerId', '==', uid);
+      const userAttemptsSnap = await transaction.get(userAttemptsQuery);
+
+      if (userAttemptsSnap.size >= limit) {
+        throw new Error("You have reached the maximum number of attempts.");
+      }
+
+      const newResultRef = resultsRef.doc();
+      transaction.set(newResultRef, {
+        takerId: uid,
+        takerEmail: email,
         score: score,
         totalQuestions: quizData.length,
-        quizData: quizData,
-        completedAt: FieldValue.serverTimestamp(),
-        originalQuizId: quizId,
-        answers: answers,
-        duration: duration
-      });
-    } else {
-      // Subsequent attempts: Update the existing copy
-      const takerQuizDocRef = takerQuizSnap.docs[0].ref;
-      await takerQuizDocRef.update({
-        score: score,
         completedAt: FieldValue.serverTimestamp(),
         answers: answers,
         duration: duration
       });
-    }
+
+      if (takerQuizSnap.empty) {
+        const newTakerQuizRef = db.collection('quizzes').doc();
+        transaction.set(newTakerQuizRef, {
+          ownerId: uid,
+          documentId: quizDocData.documentId,
+          documentName: quizDocData.documentName,
+          score: score,
+          totalQuestions: quizData.length,
+          quizData: quizData,
+          completedAt: FieldValue.serverTimestamp(),
+          originalQuizId: quizId,
+          answers: answers,
+          duration: duration
+        });
+      } else {
+        const takerQuizDocRef = takerQuizSnap.docs[0].ref;
+        transaction.update(takerQuizDocRef, {
+          score: score,
+          completedAt: FieldValue.serverTimestamp(),
+          answers: answers,
+          duration: duration
+        });
+      }
+    });
 
     res.status(201).send("Quiz result saved successfully.");
   } catch (error) {
-    console.error("Error saving shared quiz result:", error);
-    res.status(500).send("Could not save your quiz result.");
+    console.error("Error saving shared quiz result:", error.message);
+    if (error.message.includes("maximum number of attempts")) {
+      return res.status(403).send(error.message);
+    }
+    res.status(500).send("Could not save your quiz result due to a server error.");
+  }
+});
+
+// ** THE FIX: New endpoint to handle name updates **
+app.post('/update-quiz-name', verifyFirebaseToken, async (req, res) => {
+  const { quizId, newName } = req.body;
+  const userId = req.user.uid;
+
+  if (!quizId || !newName) {
+    return res.status(400).send("Missing quiz ID or new name.");
+  }
+
+  try {
+    const quizRef = db.collection('quizzes').doc(quizId);
+    const quizSnap = await quizRef.get();
+
+    if (!quizSnap.exists) {
+      return res.status(404).send("Quiz not found.");
+    }
+    if (quizSnap.data().ownerId !== userId) {
+      return res.status(403).send("You are not authorized to edit this quiz.");
+    }
+
+    await quizRef.update({ documentName: newName });
+    res.status(200).send("Quiz name updated successfully.");
+
+  } catch (error) {
+    console.error("Error updating quiz name:", error);
+    res.status(500).send("Server error while updating quiz name.");
   }
 });
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, doc, deleteDoc, where, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, where, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import DocumentUploader from './DocumentUploader';
@@ -46,6 +46,7 @@ function Dashboard({ user }) {
   const [showResultsModal, setShowResultsModal] = useState(null);
   const [viewingDetailsFor, setViewingDetailsFor] = useState(null);
   const [quizToShare, setQuizToShare] = useState(null);
+  const [isSharedQuizFlow, setIsSharedQuizFlow] = useState(null);
 
   const handleDelete = async (documentToDelete) => {
     if (!window.confirm(`Are you sure you want to delete "${documentToDelete.data().name}"?`)) return;
@@ -146,6 +147,7 @@ function Dashboard({ user }) {
     setSelectedDoc(null);
     setQuizData(null);
     setRefinementText('');
+    setIsSharedQuizFlow(null);
   };
 
   const handleSaveAndExit = async (score, answers) => {
@@ -174,13 +176,31 @@ function Dashboard({ user }) {
     resetToDashboard();
   };
     
-  const handleRetakeQuiz = (quizToRetake) => {
+  const handleRetakeQuiz = async (quizToRetake) => {
     const quizDataFromList = quizToRetake.data();
+
+    if (quizDataFromList.originalQuizId) {
+      // ** THE FIX: Check the attempt limit before starting the retake **
+      const resultsRef = collection(db, 'quizzes', quizDataFromList.originalQuizId, 'results');
+      const q = query(resultsRef, where('takerId', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+
+      const originalQuizRef = doc(db, 'quizzes', quizDataFromList.originalQuizId);
+      const originalQuizSnap = await getDoc(originalQuizRef);
+      const limit = originalQuizSnap.exists() ? originalQuizSnap.data().attemptLimit || 10 : 10;
+
+      if (querySnapshot.size >= limit) {
+        alert("You have reached the maximum number of attempts for this quiz.");
+        return; // Stop the function here
+      }
+      setIsSharedQuizFlow({ originalQuizId: quizDataFromList.originalQuizId });
+    } else {
+      setIsSharedQuizFlow(null);
+    }
+    
     const mockDocument = {
       id: quizDataFromList.documentId,
-      data: () => ({
-        name: quizDataFromList.documentName,
-      }),
+      data: () => ({ name: quizDataFromList.documentName }),
     };
     setSelectedDoc(mockDocument);
     setQuizData(quizDataFromList.quizData);
@@ -191,36 +211,36 @@ function Dashboard({ user }) {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       setSelectedDoc(docSnap);
+      setIsSharedQuizFlow(null);
     } else {
       console.error("Original document not found for this quiz.");
       alert("Could not find the original document to refine this quiz.");
     }
   };
 
-  const handleShareQuiz = (quiz) => {
-    setQuizToShare(quiz);
+  const handleUpdateQuizName = async (quizId, newName) => {
+    const quizRef = doc(db, 'quizzes', quizId);
+    try {
+      await updateDoc(quizRef, { documentName: newName });
+    } catch (error) {
+      console.error("Error updating quiz name:", error);
+      alert("Could not update quiz name. Please try again.");
+    }
   };
 
+  const handleShareQuiz = (quiz) => { setQuizToShare(quiz); };
   const handleSetAttemptLimit = async (quizId, limit) => {
     const quizRef = doc(db, 'quizzes', quizId);
-    await updateDoc(quizRef, {
-      attemptLimit: limit
-    });
+    await updateDoc(quizRef, { attemptLimit: limit });
   };
-
-  const handleViewDetails = (result) => {
-    setViewingDetailsFor(result);
-  };
-
-  // This one function now handles all "Results" button clicks
-  const handleShowResults = (quiz) => {
-    setShowResultsModal(quiz);
-  };
+  const handleViewDetails = (result) => { setViewingDetailsFor(result); };
+  const handleShowResults = (quiz) => { setShowResultsModal(quiz); };
 
   if (quizData) {
     return (
       <Quiz
         quizData={quizData}
+        isSharedQuizFlow={isSharedQuizFlow}
         onSaveAndExit={handleSaveAndExit}
         onRegenerate={handleRegenerate}
         onExitWithoutSaving={handleExitWithoutSaving}
@@ -261,63 +281,34 @@ function Dashboard({ user }) {
   
   return (
     <div className="dashboard-container">
-      {quizToShare && (
-        <ShareQuizModal
-          quiz={quizToShare}
-          onShare={handleSetAttemptLimit}
-          onClose={() => setQuizToShare(null)}
-        />
-      )}
-      
-      {showResultsModal && !viewingDetailsFor && (
-        <QuizResults
-          quiz={showResultsModal}
-          onViewDetails={handleViewDetails}
-          onClose={() => setShowResultsModal(null)}
-        />
-      )}
-
+      {quizToShare && ( <ShareQuizModal quiz={quizToShare} onShare={handleSetAttemptLimit} onClose={() => setQuizToShare(null)} /> )}
+      {showResultsModal && !viewingDetailsFor && ( <QuizResults quiz={showResultsModal} onViewDetails={handleViewDetails} onClose={() => setShowResultsModal(null)} /> )}
       {showResultsModal && viewingDetailsFor && (
         <QuizAttemptDetails
           result={viewingDetailsFor}
           quizData={showResultsModal.data()}
-          onClose={() => {
-            setViewingDetailsFor(null);
-            setShowResultsModal(null);
-          }}
+          onClose={() => { setViewingDetailsFor(null); setShowResultsModal(null); }}
         />
       )}
 
       <div className="dashboard-section">
         <h3>My Training Documents</h3>
-        {user.isAnonymous ? (
-          <p className="guest-message">Sign up for a full account to upload and save your own documents!</p>
-        ) : (
-          <DocumentUploader />
-        )}
+        {user.isAnonymous ? ( <p className="guest-message">Sign up for a full account to upload and save your own documents!</p> ) : ( <DocumentUploader /> )}
         <div className="document-list">
           {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
           {docsLoading && <span>Loading documents...</span>}
-          {user.isAnonymous ? (
-            <p className="no-documents">This is where your uploaded documents would appear. Sign up to save your work!</p>
-          ) : docsValue && (
+          {user.isAnonymous ? ( <p className="no-documents">This is where your uploaded documents would appear. Sign up to save your work!</p> ) : docsValue && (
             <ul>
               {docsValue.docs.map((doc) => (
                 <li key={doc.id} className="document-item">
                   <span>{doc.data().name}</span>
                   <div className="document-actions">
-                      <button onClick={() => setSelectedDoc(doc)} className="action-btn generate-btn">
-                          Generate Quiz
-                      </button>
-                      <button onClick={() => handleDelete(doc)} className="action-btn delete-btn">
-                          Delete
-                      </button>
+                      <button onClick={() => { setSelectedDoc(doc); setIsSharedQuizFlow(null); }} className="action-btn generate-btn"> Generate Quiz </button>
+                      <button onClick={() => handleDelete(doc)} className="action-btn delete-btn"> Delete </button>
                   </div>
                 </li>
               ))}
-               {docsValue.docs.length === 0 && !docsLoading && (
-                  <p className="no-documents">You haven't uploaded any documents yet.</p>
-              )}
+               {docsValue.docs.length === 0 && !docsLoading && ( <p className="no-documents">You haven't uploaded any documents yet.</p> )}
             </ul>
           )}
         </div>
@@ -329,6 +320,7 @@ function Dashboard({ user }) {
           onRefine={handleRefineQuiz}
           onShowResults={handleShowResults}
           onShare={handleShareQuiz}
+          onUpdateName={handleUpdateQuizName}
         />
       </div>
     </div>
