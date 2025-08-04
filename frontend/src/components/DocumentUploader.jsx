@@ -5,7 +5,7 @@ import { storage, db, auth } from '../firebase';
 import { v4 as uuidv4 } from 'uuid';
 import './DocumentUploader.css';
 
-function DocumentUploader() {
+function DocumentUploader({ onFileSelect }) {
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
@@ -22,28 +22,26 @@ function DocumentUploader() {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
-      setFile(selectedFile);
+      if (user && user.isAnonymous) {
+        onFileSelect(selectedFile);
+      } else {
+        setFile(selectedFile);
+      }
       setError('');
     }
   };
 
   const handleUpload = () => {
-    if (!file || !user) {
-      setError("You must be logged in and select a file to upload.");
+    if (!file || !user || user.isAnonymous) {
+      setError("You must be logged in to upload and save files.");
       return;
     }
 
     setIsUploading(true);
-    // Simplified storage path: documents/{userId}/{fileId}-{fileName}
     const storagePath = `documents/${user.uid}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
     
-    const metadata = {
-      customMetadata: {
-        'ownerUid': user.uid
-      }
-    };
-
+    const metadata = { customMetadata: { 'ownerUid': user.uid } };
     const uploadTask = uploadBytesResumable(storageRef, file, metadata);
 
     uploadTask.on('state_changed', 
@@ -55,7 +53,6 @@ function DocumentUploader() {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
-          // Add document metadata to the top-level 'documents' collection
           await addDoc(collection(db, "documents"), {
             name: file.name,
             url: downloadURL,
@@ -79,16 +76,18 @@ function DocumentUploader() {
         {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
       </label>
       
-      {isUploading ? (
-        <div className="progress-bar-container">
-          <div className="progress-bar" style={{width: `${progress}%`}}>
-            {Math.round(progress)}%
+      {user && !user.isAnonymous && (
+        isUploading ? (
+          <div className="progress-bar-container">
+            <div className="progress-bar" style={{width: `${progress}%`}}>
+              {Math.round(progress)}%
+            </div>
           </div>
-        </div>
-      ) : (
-        <button onClick={handleUpload} className="upload-button" disabled={!file}>
-          Upload and Save
-        </button>
+        ) : (
+          <button onClick={handleUpload} className="upload-button" disabled={!file}>
+            Upload and Save
+          </button>
+        )
       )}
 
       {error && <p className="error-text">{error}</p>}

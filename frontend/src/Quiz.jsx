@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from './api'; // Import api
+import api from './api';
 import './Quiz.css';
 
 function Quiz({
@@ -10,7 +10,8 @@ function Quiz({
   refinementText,
   setRefinementText,
   onQuizStart,
-  isSharedQuizFlow // ** THE FIX: Receive the new prop **
+  isSharedQuizFlow,
+  isGuest // ** THE FIX: Receive the new prop **
 }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -22,7 +23,6 @@ function Quiz({
   const currentQuestion = quizData[currentQuestionIndex];
 
   useEffect(() => {
-    // Start timer for all quiz types
     setStartTime(Date.now());
   }, []);
 
@@ -53,8 +53,7 @@ function Quiz({
       setShowResults(true);
     }
   };
-
-  // ** THE FIX: A new save handler specifically for shared quiz retakes **
+  
   const handleSaveSharedQuizRetake = async (currentScore, currentAnswers) => {
     const endTime = Date.now();
     const durationInSeconds = Math.round((endTime - startTime) / 1000);
@@ -68,7 +67,7 @@ function Quiz({
         duration: durationInSeconds,
       });
       alert("Your results have been updated!");
-      onExitWithoutSaving(); // This function now resets state and returns to dashboard
+      onExitWithoutSaving();
     } catch (err) {
       console.error("Error saving shared quiz retake:", err);
       alert(err.response?.data || "Could not save your quiz result.");
@@ -96,10 +95,12 @@ function Quiz({
         </div>
 
         <div className="results-actions">
-          {/* ** THE FIX: Conditionally call the correct save function ** */}
+          {/* ** THE FIX: Disable the save button for guests ** */}
           <button 
             onClick={() => isSharedQuizFlow ? handleSaveSharedQuizRetake(score, userAnswers) : onSaveAndExit(score, userAnswers)} 
             className="action-button save-exit-button"
+            disabled={isGuest}
+            title={isGuest ? "Create an account to save your quizzes" : ""}
           >
             Save and Return to Dashboard
           </button>

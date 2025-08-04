@@ -35,7 +35,7 @@ function preprocessCanvas(canvas) {
 
 function Dashboard({ user }) {
   const [docsValue, docsLoading, docsError] = useCollection(
-    user ? query(collection(db, 'documents'), where('ownerId', '==', user.uid)) : null
+    user && !user.isAnonymous ? query(collection(db, 'documents'), where('ownerId', '==', user.uid)) : null
   );
 
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -47,6 +47,7 @@ function Dashboard({ user }) {
   const [viewingDetailsFor, setViewingDetailsFor] = useState(null);
   const [quizToShare, setQuizToShare] = useState(null);
   const [isSharedQuizFlow, setIsSharedQuizFlow] = useState(null);
+  const [guestFile, setGuestFile] = useState(null);
 
   const handleDelete = async (documentToDelete) => {
     if (!window.confirm(`Are you sure you want to delete "${documentToDelete.data().name}"?`)) return;
@@ -111,9 +112,8 @@ function Dashboard({ user }) {
     setProgress(0);
     setQuizData(null); 
     try {
-      const docUrl = selectedDoc.data().url;
-      const response = await api.get(docUrl, { responseType: 'blob' });
-      const fileBlob = response.data;
+      const docData = selectedDoc.data();
+      const fileBlob = docData.blob || (await api.get(docData.url, { responseType: 'blob' })).data;
       const fileType = fileBlob.type;
       let extractedText = '';
 
@@ -148,6 +148,7 @@ function Dashboard({ user }) {
     setQuizData(null);
     setRefinementText('');
     setIsSharedQuizFlow(null);
+    setGuestFile(null);
   };
 
   const handleSaveAndExit = async (score, answers) => {
@@ -168,30 +169,22 @@ function Dashboard({ user }) {
     resetToDashboard();
   };
   
-  const handleRegenerate = () => {
-    handleGenerateQuiz();
-  };
-
-  const handleExitWithoutSaving = () => {
-    resetToDashboard();
-  };
+  const handleRegenerate = () => { handleGenerateQuiz(); };
+  const handleExitWithoutSaving = () => { resetToDashboard(); };
     
   const handleRetakeQuiz = async (quizToRetake) => {
     const quizDataFromList = quizToRetake.data();
 
     if (quizDataFromList.originalQuizId) {
-      // ** THE FIX: Check the attempt limit before starting the retake **
       const resultsRef = collection(db, 'quizzes', quizDataFromList.originalQuizId, 'results');
       const q = query(resultsRef, where('takerId', '==', user.uid));
       const querySnapshot = await getDocs(q);
-
       const originalQuizRef = doc(db, 'quizzes', quizDataFromList.originalQuizId);
       const originalQuizSnap = await getDoc(originalQuizRef);
       const limit = originalQuizSnap.exists() ? originalQuizSnap.data().attemptLimit || 10 : 10;
-
       if (querySnapshot.size >= limit) {
         alert("You have reached the maximum number of attempts for this quiz.");
-        return; // Stop the function here
+        return;
       }
       setIsSharedQuizFlow({ originalQuizId: quizDataFromList.originalQuizId });
     } else {
@@ -246,6 +239,7 @@ function Dashboard({ user }) {
         onExitWithoutSaving={handleExitWithoutSaving}
         refinementText={refinementText}
         setRefinementText={setRefinementText}
+        isGuest={user.isAnonymous}
       />
     );
   }
@@ -293,36 +287,55 @@ function Dashboard({ user }) {
 
       <div className="dashboard-section">
         <h3>My Training Documents</h3>
-        {user.isAnonymous ? ( <p className="guest-message">Sign up for a full account to upload and save your own documents!</p> ) : ( <DocumentUploader /> )}
+        <DocumentUploader onFileSelect={setGuestFile} />
+        
         <div className="document-list">
-          {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
-          {docsLoading && <span>Loading documents...</span>}
-          {user.isAnonymous ? ( <p className="no-documents">This is where your uploaded documents would appear. Sign up to save your work!</p> ) : docsValue && (
-            <ul>
-              {docsValue.docs.map((doc) => (
-                <li key={doc.id} className="document-item">
-                  <span>{doc.data().name}</span>
+          {user.isAnonymous ? (
+            guestFile && (
+              <ul>
+                <li className="document-item">
+                  <span>{guestFile.name}</span>
                   <div className="document-actions">
-                      <button onClick={() => { setSelectedDoc(doc); setIsSharedQuizFlow(null); }} className="action-btn generate-btn"> Generate Quiz </button>
-                      <button onClick={() => handleDelete(doc)} className="action-btn delete-btn"> Delete </button>
+                      <button onClick={() => setSelectedDoc({ data: () => ({ name: guestFile.name, blob: guestFile }) })} className="action-btn generate-btn"> Generate Quiz </button>
+                      <button onClick={() => setGuestFile(null)} className="action-btn delete-btn"> Delete </button>
                   </div>
                 </li>
-              ))}
-               {docsValue.docs.length === 0 && !docsLoading && ( <p className="no-documents">You haven't uploaded any documents yet.</p> )}
-            </ul>
+              </ul>
+            )
+          ) : (
+            <>
+              {docsError && <strong>Error: {JSON.stringify(docsError)}</strong>}
+              {docsLoading && <span>Loading documents...</span>}
+              {docsValue && (
+                <ul>
+                  {docsValue.docs.map((doc) => (
+                    <li key={doc.id} className="document-item">
+                      <span>{doc.data().name}</span>
+                      <div className="document-actions">
+                          <button onClick={() => { setSelectedDoc(doc); setIsSharedQuizFlow(null); }} className="action-btn generate-btn"> Generate Quiz </button>
+                          <button onClick={() => handleDelete(doc)} className="action-btn delete-btn"> Delete </button>
+                      </div>
+                    </li>
+                  ))}
+                   {docsValue.docs.length === 0 && !docsLoading && ( <p className="no-documents">You haven't uploaded any documents yet.</p> )}
+                </ul>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      <div className="dashboard-section">
-        <QuizList
-          onRetake={handleRetakeQuiz}
-          onRefine={handleRefineQuiz}
-          onShowResults={handleShowResults}
-          onShare={handleShareQuiz}
-          onUpdateName={handleUpdateQuizName}
-        />
-      </div>
+      {!user.isAnonymous && (
+        <div className="dashboard-section">
+          <QuizList
+            onRetake={handleRetakeQuiz}
+            onRefine={handleRefineQuiz}
+            onShowResults={handleShowResults}
+            onShare={handleShareQuiz}
+            onUpdateName={handleUpdateQuizName}
+          />
+        </div>
+      )}
     </div>
   );
 }

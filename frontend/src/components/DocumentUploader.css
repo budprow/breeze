@@ -8,10 +8,13 @@
 .upload-label {
   display: block;
   padding: 10px;
-  background-color: #e9ecef;
+  /* THE FIX: Changed the background-color */
+  background-color: #28a745; /* This is the same green as the upload button */
+  color: white; /* Added to make the text readable */
   border-radius: 5px;
   cursor: pointer;
   margin-bottom: 15px;
+  font-weight: bold; /* Added for consistency */
 }
 .upload-button {
   padding: 10px 20px;
