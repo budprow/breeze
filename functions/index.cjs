@@ -2,9 +2,9 @@ const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
 const functions = require("firebase-functions");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { onRequest } = require("firebase-functions/v2/https");
-const { FieldValue } = require("firebase-admin/firestore");
+const {GoogleGenerativeAI} = require("@google/generative-ai");
+const {onRequest} = require("firebase-functions/v2/https");
+const {FieldValue} = require("firebase-admin/firestore");
 const quizGenerator = require("./services/quizGenerator.cjs");
 require("dotenv").config();
 
@@ -12,7 +12,7 @@ admin.initializeApp();
 const db = admin.firestore();
 const app = express();
 
-app.use(cors({ origin: true }));
+app.use(cors({origin: true}));
 app.use(express.json());
 
 const geminiApiKey = process.env.GEMINI_API_KEY || (functions.config().gemini && functions.config().gemini.key);
@@ -42,7 +42,7 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
     return res.status(500).send("Server is not configured with a Gemini API key.");
   }
   try {
-    const { text, refinementText } = req.body;
+    const {text, refinementText} = req.body;
     if (!text) return res.status(400).send("No text provided.");
     const quizData = await quizGenerator.generateMultipleChoice(genAI, text, refinementText);
     if (!quizData) {
@@ -56,7 +56,7 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
-  const { quizData, score, documentName, documentId, answers } = req.body;
+  const {quizData, score, documentName, documentId, answers} = req.body;
   const userId = req.user.uid;
 
   if (!quizData || score === undefined || !documentName || !documentId || !answers) {
@@ -72,7 +72,7 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
       totalQuestions: quizData.length,
       quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
-      answers: answers
+      answers: answers,
     });
     res.status(201).send("Quiz saved successfully.");
   } catch (error) {
@@ -82,33 +82,33 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
 });
 
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
-  const { quizId, score, quizData, answers, duration } = req.body;
-  const { uid, email } = req.user;
+  const {quizId, score, quizData, answers, duration} = req.body;
+  const {uid, email} = req.user;
 
   if (!quizId || score === undefined || !quizData || !answers || duration === undefined) {
     return res.status(400).send("Missing required data.");
   }
 
   try {
-    const originalQuizRef = db.collection('quizzes').doc(quizId);
-    const resultsRef = originalQuizRef.collection('results');
-    
+    const originalQuizRef = db.collection("quizzes").doc(quizId);
+    const resultsRef = originalQuizRef.collection("results");
+
     const originalQuizSnap = await originalQuizRef.get();
     if (!originalQuizSnap.exists) {
       return res.status(404).send("Original quiz not found.");
     }
 
-    const takerQuizQuery = db.collection('quizzes')
-      .where('ownerId', '==', uid)
-      .where('originalQuizId', '==', quizId)
-      .limit(1);
+    const takerQuizQuery = db.collection("quizzes")
+        .where("ownerId", "==", uid)
+        .where("originalQuizId", "==", quizId)
+        .limit(1);
     const takerQuizSnap = await takerQuizQuery.get();
 
     await db.runTransaction(async (transaction) => {
       const quizDocData = originalQuizSnap.data();
       const limit = quizDocData.attemptLimit || 10;
-      
-      const userAttemptsQuery = resultsRef.where('takerId', '==', uid);
+
+      const userAttemptsQuery = resultsRef.where("takerId", "==", uid);
       const userAttemptsSnap = await transaction.get(userAttemptsQuery);
 
       if (userAttemptsSnap.size >= limit) {
@@ -123,11 +123,11 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
         totalQuestions: quizData.length,
         completedAt: FieldValue.serverTimestamp(),
         answers: answers,
-        duration: duration
+        duration: duration,
       });
 
       if (takerQuizSnap.empty) {
-        const newTakerQuizRef = db.collection('quizzes').doc();
+        const newTakerQuizRef = db.collection("quizzes").doc();
         transaction.set(newTakerQuizRef, {
           ownerId: uid,
           documentId: quizDocData.documentId,
@@ -138,7 +138,7 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
           completedAt: FieldValue.serverTimestamp(),
           originalQuizId: quizId,
           answers: answers,
-          duration: duration
+          duration: duration,
         });
       } else {
         const takerQuizDocRef = takerQuizSnap.docs[0].ref;
@@ -146,7 +146,7 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
           score: score,
           completedAt: FieldValue.serverTimestamp(),
           answers: answers,
-          duration: duration
+          duration: duration,
         });
       }
     });
@@ -161,24 +161,24 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   }
 });
 
-app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
-    const { restaurantId } = req.body;
-    const managerId = req.user.uid;
-    if (!restaurantId || !managerId) {
-        return res.status(400).send('Missing restaurantId or managerId.');
-    }
-    try {
-      const inviteRef = await db.collection('restaurants').doc(restaurantId).collection('invites').add({
-        createdAt: FieldValue.serverTimestamp(),
-        used: false,
-        createdBy: managerId,
-      });
-      res.status(201).json({ inviteCode: inviteRef.id });
-    } catch (error) {
-      console.error("Error creating invite:", error);
-      res.status(500).send('Server error while creating invite.');
-    }
-  });
+app.post("/create-invite", verifyFirebaseToken, async (req, res) => {
+  const {restaurantId} = req.body;
+  const managerId = req.user.uid;
+  if (!restaurantId || !managerId) {
+    return res.status(400).send("Missing restaurantId or managerId.");
+  }
+  try {
+    const inviteRef = await db.collection("restaurants").doc(restaurantId).collection("invites").add({
+      createdAt: FieldValue.serverTimestamp(),
+      used: false,
+      createdBy: managerId,
+    });
+    res.status(201).json({inviteCode: inviteRef.id});
+  } catch (error) {
+    console.error("Error creating invite:", error);
+    res.status(500).send("Server error while creating invite.");
+  }
+});
 
 // ** THE FIX: Remove the 'secrets' option from this line **
 exports.api = onRequest(app);
