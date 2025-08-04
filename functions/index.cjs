@@ -161,35 +161,6 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// ** THE FIX: New endpoint to handle name updates **
-app.post('/update-quiz-name', verifyFirebaseToken, async (req, res) => {
-  const { quizId, newName } = req.body;
-  const userId = req.user.uid;
-
-  if (!quizId || !newName) {
-    return res.status(400).send("Missing quiz ID or new name.");
-  }
-
-  try {
-    const quizRef = db.collection('quizzes').doc(quizId);
-    const quizSnap = await quizRef.get();
-
-    if (!quizSnap.exists) {
-      return res.status(404).send("Quiz not found.");
-    }
-    if (quizSnap.data().ownerId !== userId) {
-      return res.status(403).send("You are not authorized to edit this quiz.");
-    }
-
-    await quizRef.update({ documentName: newName });
-    res.status(200).send("Quiz name updated successfully.");
-
-  } catch (error) {
-    console.error("Error updating quiz name:", error);
-    res.status(500).send("Server error while updating quiz name.");
-  }
-});
-
 app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     const { restaurantId } = req.body;
     const managerId = req.user.uid;
@@ -209,4 +180,5 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     }
   });
 
-exports.api = onRequest({ secrets: ["GEMINI_API_KEY"] }, app);
+// ** THE FIX: Remove the 'secrets' option from this line **
+exports.api = onRequest(app);
