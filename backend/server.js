@@ -3,9 +3,11 @@ const cors = require('cors');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
-
+const pdf = require('pdf-parse'); // You'll need to add this require at the top of your file
 const app = express();
 const port = 3001;
+
+
 
 // --- MIDDLEWARE CONFIGURATION ---
 app.use(cors({ origin: true }));
@@ -16,7 +18,8 @@ app.use(express.urlencoded({ extended: true }));
 try {
   const serviceAccount = require('./serviceAccountKey.json');
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
+    storageBucket: "breeze-9c703.firebasestorage.app"
   });
   console.log("Firebase Admin SDK initialized successfully.");
 } catch (e) {
@@ -102,6 +105,46 @@ app.post('/generate-quiz', async (req, res) => {
         res.status(500).send("An error occurred while generating the quiz.");
     }
 });
+
+// REPLACE the old /api/document/text route with this new one
+
+app.post('/api/document/text', async (req, res) => {
+    console.log("Hit /api/document/text endpoint");
+    try {
+        const { fileUrl } = req.body;
+
+        if (!fileUrl) {
+            console.log("No file URL provided");
+            return res.status(400).json({ error: 'No file URL provided' });
+        }
+
+        const bucket = admin.storage().bucket();
+        const decodedUrl = decodeURIComponent(fileUrl);
+        // This was the old way, let's try a more robust method
+        const filePath = new URL(decodedUrl).pathname.split('/o/')[1];
+
+        console.log(`Attempting to download file from path: ${filePath}`); // New log
+
+        const file = bucket.file(filePath);
+        const [fileBuffer] = await file.download();
+
+        console.log("File downloaded successfully. Parsing PDF..."); // New log
+        const data = await pdf(fileBuffer);
+        const pages = data.text.split('\f').filter(page => page.trim().length > 0);
+
+        console.log(`Successfully extracted ${pages.length} pages.`);
+        res.status(200).json({ pages });
+
+    } catch (error) {
+        // --- THIS IS THE IMPORTANT CHANGE ---
+        console.error("DETAILED ERROR in /api/document/text:", error); // See the full error in your server log
+        res.status(500).json({ 
+            error: 'Failed to extract text from document.',
+            details: error.message // Send the specific error message back to the curl command
+        });
+    }
+});
+
 
 
 app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
