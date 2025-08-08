@@ -3,22 +3,16 @@ const cors = require('cors');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
-const pdf = require('pdf-parse'); // Ensure pdf-parse is required
+const pdf = require('pdf-parse');
 
 const app = express();
 const port = 3001;
 
-// --- THIS IS THE CRITICAL FIX ---
-// Check if we are running in a local development environment.
-// The emulators set this environment variable automatically.
-if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.NODE_ENV === 'development') {
+// This environment variable MUST be set before initializeApp() is called.
+if (process.env.NODE_ENV === 'development') {
   console.log('Development environment detected. Pointing to Storage Emulator.');
-  // This line tells the Firebase Admin SDK to send all Storage requests
-  // to the local emulator, not the live production service.
-  // We use 127.0.0.1 as it's often more reliable than 'localhost' for server processes.
   process.env['FIREBASE_STORAGE_EMULATOR_HOST'] = '127.0.0.1:9199';
 }
-// --- END OF FIX ---
 
 
 // --- MIDDLEWARE CONFIGURATION ---
@@ -125,9 +119,25 @@ app.post('/api/document/text', async (req, res) => {
             return res.status(400).json({ error: 'No file URL provided' });
         }
         const bucket = admin.storage().bucket();
-        const decodedUrl = decodeURIComponent(fileUrl);
-        const filePath = new URL(decodedUrl).pathname.split('/o/')[1];
         
+        // --- THIS IS THE CRITICAL CHANGE ---
+        // This new logic correctly handles both live and emulator URLs.
+        const decodedUrl = decodeURIComponent(fileUrl);
+        const urlObject = new URL(decodedUrl);
+        let filePath = urlObject.pathname;
+
+        // The path we need is everything AFTER the '/o/' part of the URL.
+        const objectPathIdentifier = '/o/';
+        const pathStartIndex = filePath.indexOf(objectPathIdentifier);
+
+        if (pathStartIndex === -1) {
+          throw new Error('Invalid file URL format. Could not find object identifier.');
+        }
+
+        // Extract the actual file path.
+        filePath = filePath.substring(pathStartIndex + objectPathIdentifier.length);
+        // --- END OF CHANGE ---
+
         const file = bucket.file(filePath);
         const [fileBuffer] = await file.download();
         const data = await pdf(fileBuffer);

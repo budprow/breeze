@@ -8,6 +8,17 @@ const { FieldValue } = require("firebase-admin/firestore");
 const quizGenerator = require("./services/quizGenerator.cjs");
 require("dotenv").config();
 
+// --- ADD THIS BLOCK TO CONNECT TO EMULATORS ---
+// When the Firebase emulators are running, they set this environment variable.
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  console.log("Local emulator detected! Connecting Admin SDK to emulators.");
+  // Point the Admin SDK to the local Storage emulator
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
+  // Note: The Admin SDK automatically detects the Auth and Firestore emulators
+  // when FUNCTIONS_EMULATOR is true, but Storage needs to be set explicitly.
+}
+// --- END OF FIX ---
+
 admin.initializeApp();
 const db = admin.firestore();
 const app = express();
@@ -36,7 +47,6 @@ const verifyFirebaseToken = async (req, res, next) => {
     res.status(403).send("Could not verify token");
   }
 };
-
 app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   if (!genAI) {
     return res.status(500).send("Server is not configured with a Gemini API key.");
@@ -70,7 +80,8 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
       documentName: documentName,
       score: score,
       totalQuestions: quizData.length,
-      quizData: quizData,
+
+     quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
       answers: answers
     });
@@ -80,7 +91,6 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
     res.status(500).send("Server error while saving quiz.");
   }
 });
-
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   const { quizId, score, quizData, answers, duration } = req.body;
   const { uid, email } = req.user;
@@ -92,13 +102,14 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   try {
     const originalQuizRef = db.collection('quizzes').doc(quizId);
     const resultsRef = originalQuizRef.collection('results');
-    
+
     const originalQuizSnap = await originalQuizRef.get();
     if (!originalQuizSnap.exists) {
       return res.status(404).send("Original quiz not found.");
     }
 
-    const takerQuizQuery = db.collection('quizzes')
+
+   const takerQuizQuery = db.collection('quizzes')
       .where('ownerId', '==', uid)
       .where('originalQuizId', '==', quizId)
       .limit(1);
@@ -107,16 +118,14 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
     await db.runTransaction(async (transaction) => {
       const quizDocData = originalQuizSnap.data();
       const limit = quizDocData.attemptLimit || 10;
-      
-      const userAttemptsQuery = resultsRef.where('takerId', '==', uid);
+const userAttemptsQuery = resultsRef.where('takerId', '==', uid);
       const userAttemptsSnap = await transaction.get(userAttemptsQuery);
-
-      if (userAttemptsSnap.size >= limit) {
+if (userAttemptsSnap.size >= limit) {
         throw new Error("You have reached the maximum number of attempts.");
-      }
+}
 
       const newResultRef = resultsRef.doc();
-      transaction.set(newResultRef, {
+transaction.set(newResultRef, {
         takerId: uid,
         takerEmail: email,
         score: score,
@@ -125,10 +134,9 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
         answers: answers,
         duration: duration
       });
-
-      if (takerQuizSnap.empty) {
+if (takerQuizSnap.empty) {
         const newTakerQuizRef = db.collection('quizzes').doc();
-        transaction.set(newTakerQuizRef, {
+transaction.set(newTakerQuizRef, {
           ownerId: uid,
           documentId: quizDocData.documentId,
           documentName: quizDocData.documentName,
@@ -137,30 +145,30 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
           quizData: quizData,
           completedAt: FieldValue.serverTimestamp(),
           originalQuizId: quizId,
-          answers: answers,
+          answers:
+answers,
           duration: duration
         });
-      } else {
+} else {
         const takerQuizDocRef = takerQuizSnap.docs[0].ref;
-        transaction.update(takerQuizDocRef, {
+transaction.update(takerQuizDocRef, {
           score: score,
           completedAt: FieldValue.serverTimestamp(),
           answers: answers,
           duration: duration
         });
-      }
+}
     });
 
     res.status(201).send("Quiz result saved successfully.");
   } catch (error) {
     console.error("Error saving shared quiz result:", error.message);
-    if (error.message.includes("maximum number of attempts")) {
+if (error.message.includes("maximum number of attempts")) {
       return res.status(403).send(error.message);
-    }
+}
     res.status(500).send("Could not save your quiz result due to a server error.");
   }
 });
-
 // ** THE FIX: New endpoint to handle name updates **
 app.post('/update-quiz-name', verifyFirebaseToken, async (req, res) => {
   const { quizId, newName } = req.body;
@@ -189,7 +197,6 @@ app.post('/update-quiz-name', verifyFirebaseToken, async (req, res) => {
     res.status(500).send("Server error while updating quiz name.");
   }
 });
-
 app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     const { restaurantId } = req.body;
     const managerId = req.user.uid;
@@ -202,11 +209,11 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
         used: false,
         createdBy: managerId,
       });
+
       res.status(201).json({ inviteCode: inviteRef.id });
     } catch (error) {
       console.error("Error creating invite:", error);
       res.status(500).send('Server error while creating invite.');
     }
   });
-
 exports.api = onRequest({ secrets: ["GEMINI_API_KEY"] }, app);
