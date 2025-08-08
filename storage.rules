@@ -2,10 +2,11 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // ** THE FIX: The path was too specific, now it matches all files in the documents folder **
-    match /documents/{userId}/{fileId} {
-      // Allow read, write, and delete only if the user's ID matches the owner ID in the metadata
-      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    // Specifically match the path for file uploads
+    match /documents/{userId}/{fileName} {
+      // Allow a user to read or write a file
+      // but ONLY if their authenticated UID matches the {userId} in the path.
+      allow read, write: if request.auth.uid == userId;
     }
   }
 }

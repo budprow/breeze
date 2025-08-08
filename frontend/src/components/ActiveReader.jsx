@@ -1,28 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
 
 function ActiveReader() {
-    const { fileUrl: encodedFileUrl } = useParams();
-    const fileUrl = decodeURIComponent(encodedFileUrl);
-
+    // This state will hold the file URL we get from the browser's address bar
+    const [fileUrl, setFileUrl] = useState('');
     const [pages, setPages] = useState([]);
     const [documentName, setDocumentName] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (!fileUrl) return;
+        // When the component loads, get the full path from the URL
+        const path = window.location.pathname;
+        let decodedUrl = '';
 
-        // Extract a readable name from the URL for display
-        const nameFromUrl = fileUrl.split('%2F').pop().split('?')[0];
+        // Extract the encoded URL part
+        if (path.startsWith('/read/')) {
+            const encodedUrl = path.substring(6);
+            decodedUrl = decodeURIComponent(encodedUrl);
+            setFileUrl(decodedUrl);
+        }
+
+        if (!decodedUrl) {
+            setIsLoading(false);
+            setError("No document URL found in the address bar.");
+            return;
+        };
+
+        // A little trick to get a clean document name from the long URL
+        const nameFromUrl = decodedUrl.split('%2F').pop().split('?')[0];
         setDocumentName(decodeURIComponent(nameFromUrl));
 
         const fetchDocumentText = async () => {
             try {
+                // This call goes to our backend endpoint
                 const response = await fetch('/api/document/text', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fileUrl }),
+                    body: JSON.stringify({ fileUrl: decodedUrl }),
                 });
 
                 if (!response.ok) {
@@ -40,24 +54,26 @@ function ActiveReader() {
         };
 
         fetchDocumentText();
-    }, [fileUrl]);
+    }, []); // This effect only needs to run once when the component mounts
 
     if (isLoading) {
-        return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading document...</div>;
+        return <div className="text-center p-8">Loading document...</div>;
     }
 
     if (error) {
-        return <div style={{ padding: '2rem', textAlign: 'center', color: 'red' }}>Error: {error}</div>;
+        return <div className="text-center p-8 text-red-500">Error: {error}</div>;
     }
 
     return (
-        <div style={{ padding: '1rem 2rem' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>Active Reader: {documentName}</h1>
-            <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '1rem', height: '80vh', overflowY: 'auto', background: '#fff' }}>
+        <div className="p-4 md:p-8">
+            <h1 className="text-2xl font-bold mb-4 truncate">Active Reader: {documentName}</h1>
+            <div className="bg-white border rounded-lg shadow-sm p-4 h-[80vh] overflow-y-auto">
                 {pages.map((pageText, index) => (
-                    <div key={index} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '2px dashed #eee' }}>
-                        <h3 style={{ fontWeight: '600', marginBottom: '0.5rem' }}>Page {index + 1}</h3>
-                        <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{pageText}</p>
+                    <div key={index} className="page-content mb-4 pb-4 border-b-2 border-gray-200 border-dashed">
+                        <h3 className="font-semibold text-lg mb-2 text-gray-500">Page {index + 1}</h3>
+                        <p className="whitespace-pre-wrap leading-relaxed text-gray-800">
+                            {pageText}
+                        </p>
                     </div>
                 ))}
             </div>

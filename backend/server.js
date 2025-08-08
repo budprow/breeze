@@ -3,10 +3,22 @@ const cors = require('cors');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
-const pdf = require('pdf-parse'); // You'll need to add this require at the top of your file
+const pdf = require('pdf-parse'); // Ensure pdf-parse is required
+
 const app = express();
 const port = 3001;
 
+// --- THIS IS THE CRITICAL FIX ---
+// Check if we are running in a local development environment.
+// The emulators set this environment variable automatically.
+if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.NODE_ENV === 'development') {
+  console.log('Development environment detected. Pointing to Storage Emulator.');
+  // This line tells the Firebase Admin SDK to send all Storage requests
+  // to the local emulator, not the live production service.
+  // We use 127.0.0.1 as it's often more reliable than 'localhost' for server processes.
+  process.env['FIREBASE_STORAGE_EMULATOR_HOST'] = '127.0.0.1:9199';
+}
+// --- END OF FIX ---
 
 
 // --- MIDDLEWARE CONFIGURATION ---
@@ -19,7 +31,7 @@ try {
   const serviceAccount = require('./serviceAccountKey.json');
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    storageBucket: "breeze-9c703.firebasestorage.app"
+    storageBucket: "breeze-9c703.appspot.com"
   });
   console.log("Firebase Admin SDK initialized successfully.");
 } catch (e) {
@@ -30,7 +42,7 @@ const firestore = admin.firestore();
 // --- Gemini AI Initialization ---
 const geminiApiKey = process.env.GEMINI_API_KEY;
 if (!geminiApiKey) {
-  console.warn("Gemini API key not found in .env file. /generate-quiz will fail.");
+  console.warn("Gemini API key not found. Quiz generation will fail.");
 }
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -65,9 +77,9 @@ const parseJsonFromAiResponse = (rawText) => {
   }
 };
 
-// --- ROUTES ---
 
-app.post('/generate-quiz', async (req, res) => {
+// --- ROUTES ---
+app.post('/api/generate-quiz', async (req, res) => {
     const { text, refinementText } = req.body;
     if (!text) {
         return res.status(400).send("No text provided for quiz generation.");
@@ -106,48 +118,33 @@ app.post('/generate-quiz', async (req, res) => {
     }
 });
 
-// REPLACE the old /api/document/text route with this new one
-
 app.post('/api/document/text', async (req, res) => {
-    console.log("Hit /api/document/text endpoint");
     try {
         const { fileUrl } = req.body;
-
         if (!fileUrl) {
-            console.log("No file URL provided");
             return res.status(400).json({ error: 'No file URL provided' });
         }
-
         const bucket = admin.storage().bucket();
         const decodedUrl = decodeURIComponent(fileUrl);
-        // This was the old way, let's try a more robust method
         const filePath = new URL(decodedUrl).pathname.split('/o/')[1];
-
-        console.log(`Attempting to download file from path: ${filePath}`); // New log
-
+        
         const file = bucket.file(filePath);
         const [fileBuffer] = await file.download();
-
-        console.log("File downloaded successfully. Parsing PDF..."); // New log
         const data = await pdf(fileBuffer);
         const pages = data.text.split('\f').filter(page => page.trim().length > 0);
-
-        console.log(`Successfully extracted ${pages.length} pages.`);
+        
         res.status(200).json({ pages });
-
     } catch (error) {
-        // --- THIS IS THE IMPORTANT CHANGE ---
-        console.error("DETAILED ERROR in /api/document/text:", error); // See the full error in your server log
+        console.error("DETAILED ERROR in /api/document/text:", error);
         res.status(500).json({ 
             error: 'Failed to extract text from document.',
-            details: error.message // Send the specific error message back to the curl command
+            details: error.message 
         });
     }
 });
 
 
-
-app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
+app.post('/api/create-invite', verifyFirebaseToken, async (req, res) => {
   const { restaurantId } = req.body;
   const managerId = req.user.uid;
   if (!restaurantId || !managerId) {
@@ -166,7 +163,7 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-app.post('/validate-invite', async (req, res) => {
+app.post('/api/validate-invite', async (req, res) => {
     const { inviteCode } = req.body;
     if (!inviteCode) {
         return res.status(400).json({ error: 'Invite code is missing.' });
@@ -201,7 +198,7 @@ app.post('/validate-invite', async (req, res) => {
     }
 });
 
-app.post('/mark-invite-used', async (req, res) => {
+app.post('/api/mark-invite-used', async (req, res) => {
     const { inviteCode } = req.body;
     if (!inviteCode) {
         return res.status(400).send('Invite code is missing.');

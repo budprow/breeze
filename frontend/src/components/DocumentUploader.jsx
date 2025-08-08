@@ -1,96 +1,74 @@
-import React, { useState, useEffect } from 'react';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { storage, db, auth } from '../firebase';
-import { v4 as uuidv4 } from 'uuid';
+import React from 'react';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes } from 'firebase/storage'; // Use uploadBytes instead of uploadBytesResumable
+import { db, storage, auth } from '../firebase';
 import './DocumentUploader.css';
 
-function DocumentUploader({ onFileSelect }) {
-  const [file, setFile] = useState(null);
-  const [error, setError] = useState('');
-  const [progress, setProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [user, setUser] = useState(auth.currentUser);
+function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
-    });
-    return unsubscribe;
-  }, []);
-
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (user && user.isAnonymous) {
-        onFileSelect(selectedFile);
-      } else {
-        setFile(selectedFile);
-      }
-      setError('');
+  // This is the new, simplified upload handler.
+  const handleUploadAndSave = async () => {
+    if (!file) {
+      alert("Please select a file first.");
+      return;
     }
-  };
-
-  const handleUpload = () => {
-    if (!file || !user || user.isAnonymous) {
-      setError("You must be logged in to upload and save files.");
+    
+    const user = auth.currentUser;
+    if (!user) {
+      alert("You must be logged in to upload files.");
       return;
     }
 
-    setIsUploading(true);
-    const storagePath = `documents/${user.uid}/${uuidv4()}-${file.name}`;
-    const storageRef = ref(storage, storagePath);
-    
-    const metadata = { customMetadata: { 'ownerUid': user.uid } };
-    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+    // Signal to the Dashboard that the upload process has started.
+    onUpload(true); 
 
-    uploadTask.on('state_changed', 
-      (snapshot) => { setProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100); },
-      (error) => {
-        console.error("Upload error:", error);
-        setError('Upload failed. Check console for details.');
-        setIsUploading(false);
-      },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
-          await addDoc(collection(db, "documents"), {
-            name: file.name,
-            url: downloadURL,
-            storagePath: storagePath,
-            createdAt: serverTimestamp(),
-            ownerId: user.uid,
-          });
-          
-          setIsUploading(false);
-          setFile(null);
-          setProgress(0);
-        });
-      }
-    );
+    try {
+      // Step 1: Define the correct, secure path for the file in Storage.
+      const filePath = `documents/${user.uid}/${file.name}`;
+      const storageRef = ref(storage, filePath);
+
+      // Step 2: Directly upload the file and wait for it to complete.
+      // This is simpler and more robust than tracking progress states.
+      await uploadBytes(storageRef, file);
+      console.log("File uploaded to Storage successfully!");
+
+      // Step 3: Now that the file is uploaded, save its record to Firestore.
+      // This path EXACTLY matches the path in our firestore.rules file.
+      await addDoc(collection(db, 'users', user.uid, 'documents'), {
+        name: file.name,
+        filePath: filePath,
+        createdAt: serverTimestamp(),
+        ownerId: user.uid
+      });
+
+      console.log("File record saved to Firestore!");
+      alert("File uploaded successfully!");
+      onFileChange({ target: { files: [null] } }); // Clear the file input
+
+    } catch (error) {
+        // This will catch errors from either the Storage upload or the Firestore save.
+        console.error("An error occurred during the upload process:", error);
+        alert("Upload failed. Please check the console for details.");
+    } finally {
+        // Signal that the upload process is finished, whether it succeeded or failed.
+        onUpload(false);
+    }
   };
 
+
   return (
-    <div className="uploader-card">
-      <input type="file" id="documentUpload" onChange={handleFileChange} style={{display: 'none'}} />
-      <label htmlFor="documentUpload" className="upload-label">
+    <div className="upload-step">
+      <h3>Upload a Document</h3>
+      <label className="uploader-label">
         {file ? `Selected: ${file.name}` : 'Choose Document (PDF, IMG)'}
+        <input type="file" onChange={onFileChange} style={{ display: 'none' }} />
       </label>
       
-      {user && !user.isAnonymous && (
-        isUploading ? (
-          <div className="progress-bar-container">
-            <div className="progress-bar" style={{width: `${progress}%`}}>
-              {Math.round(progress)}%
-            </div>
-          </div>
-        ) : (
-          <button onClick={handleUpload} className="upload-button" disabled={!file}>
-            Upload and Save
-          </button>
-        )
-      )}
+      {/* The progress bar is temporarily removed to simplify the logic */}
 
-      {error && <p className="error-text">{error}</p>}
+      <button onClick={handleUploadAndSave} disabled={uploading || !file} className="action-btn generate-btn">
+        {uploading ? 'Uploading...' : 'Upload and Save'}
+      </button>
     </div>
   );
 }
