@@ -73,7 +73,10 @@ const parseJsonFromAiResponse = (rawText) => {
 
 
 // --- ROUTES ---
-app.post('/api/generate-quiz', async (req, res) => {
+// Find this existing route in your backend/server.js file
+// and add `verifyFirebaseToken` as shown below.
+
+app.post('/api/generate-quiz', verifyFirebaseToken, async (req, res) => {
     const { text, refinementText } = req.body;
     if (!text) {
         return res.status(400).send("No text provided for quiz generation.");
