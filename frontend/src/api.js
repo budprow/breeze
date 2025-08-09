@@ -4,9 +4,13 @@ import { auth } from './firebase';
 const isLocal = window.location.hostname === 'localhost';
 
 const api = axios.create({
+  // --- THIS IS THE FIX ---
+  // When running locally, we now use a relative path. The Vite proxy in
+  // vite.config.js will catch this and forward it to http://localhost:3001.
+  // When deployed, it will correctly call the production URL.
   baseURL: isLocal
-    ? 'http://127.0.0.1:5001/breeze-9c703/us-central1/api' // Your local emulator URL
-    : 'https://us-central1-breeze-9c703.cloudfunctions.net/api', // Your live production URL
+    ? '/api' 
+    : 'https://us-central1-breeze-9c703.cloudfunctions.net/api',
 });
 
 // This automatically adds the user's auth token to every request

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Quiz from './Quiz.jsx'; // Corrected Path
 import api from './api.js';   // Corrected Path
-import './ImageUploader.css'; // Corrected Path
+import './Quiz.css'; // Corrected Path
 
 function QuizFlow({ initialQuizData, sourceText, onFlowComplete, isGuest }) {
     const [quizData, setQuizData] = useState(initialQuizData);

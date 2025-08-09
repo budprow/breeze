@@ -1,81 +1,113 @@
 import React, { useEffect, useState } from 'react';
+import api from '../api';
+import QuizFlow from '../QuizFlow';
+import PdfViewer from './PdfViewer'; // Import the new PDF Viewer
+import './ActiveReader.css';
 
 function ActiveReader() {
-    // This state will hold the file URL we get from the browser's address bar
     const [fileUrl, setFileUrl] = useState('');
-    const [pages, setPages] = useState([]);
     const [documentName, setDocumentName] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [currentPageText, setCurrentPageText] = useState('');
+    const [totalPages, setTotalPages] = useState(0);
 
+    const [quizData, setQuizData] = useState(null);
+    const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+    const [quizError, setQuizError] = useState('');
+    
+    // This now only runs once to get the URL and document name
     useEffect(() => {
-        // When the component loads, get the full path from the URL
         const path = window.location.pathname;
-        let decodedUrl = '';
-
-        // Extract the encoded URL part
         if (path.startsWith('/read/')) {
             const encodedUrl = path.substring(6);
-            decodedUrl = decodeURIComponent(encodedUrl);
+            const decodedUrl = decodeURIComponent(encodedUrl);
             setFileUrl(decodedUrl);
+
+            const nameFromUrl = decodedUrl.split('%2F').pop().split('?')[0];
+            setDocumentName(decodeURIComponent(nameFromUrl));
         }
+    }, []);
 
-        if (!decodedUrl) {
-            setIsLoading(false);
-            setError("No document URL found in the address bar.");
-            return;
-        };
-
-        // A little trick to get a clean document name from the long URL
-        const nameFromUrl = decodedUrl.split('%2F').pop().split('?')[0];
-        setDocumentName(decodeURIComponent(nameFromUrl));
-
-        const fetchDocumentText = async () => {
-            try {
-                // This call goes to our backend endpoint
-                const response = await fetch('/api/document/text', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fileUrl: decodedUrl }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to fetch document text');
-                }
-
-                const data = await response.json();
-                setPages(data.pages);
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchDocumentText();
-    }, []); // This effect only needs to run once when the component mounts
-
-    if (isLoading) {
-        return <div className="text-center p-8">Loading document...</div>;
+    // Callback function to get the extracted text from the PdfViewer
+    const handlePageChange = (text) => {
+        setCurrentPageText(text);
+        setQuizData(null); // Clear old quiz data when page changes
+        setQuizError('');
+    };
+    
+    // Callback function to get the total number of pages
+    const handleDocumentLoad = (numPages) => {
+      setTotalPages(numPages);
     }
 
-    if (error) {
-        return <div className="text-center p-8 text-red-500">Error: {error}</div>;
+    const handleGenerateQuiz = async () => {
+        if (!currentPageText) {
+            setQuizError("There is no text on this page to generate a quiz from.");
+            return;
+        }
+        setIsGeneratingQuiz(true);
+        setQuizData(null);
+        setQuizError('');
+        try {
+            const response = await api.post('/generate-quiz', { text: currentPageText });
+            setQuizData(response.data);
+        } catch (err) {
+            console.error("Error generating quiz:", err);
+            setQuizError("Sorry, we couldn't generate a quiz for this page.");
+        } finally {
+            setIsGeneratingQuiz(false);
+        }
+    };
+
+    if (!fileUrl) {
+        return <div className="loading-screen"><h1>Loading...</h1></div>;
     }
 
     return (
-        <div className="p-4 md:p-8">
-            <h1 className="text-2xl font-bold mb-4 truncate">Active Reader: {documentName}</h1>
-            <div className="bg-white border rounded-lg shadow-sm p-4 h-[80vh] overflow-y-auto">
-                {pages.map((pageText, index) => (
-                    <div key={index} className="page-content mb-4 pb-4 border-b-2 border-gray-200 border-dashed">
-                        <h3 className="font-semibold text-lg mb-2 text-gray-500">Page {index + 1}</h3>
-                        <p className="whitespace-pre-wrap leading-relaxed text-gray-800">
-                            {pageText}
-                        </p>
-                    </div>
-                ))}
+        <div className="w-full">
+            <h1 className="text-2xl font-bold mb-4 text-center">Active Reader: {documentName}</h1>
+            <div className="active-reader-container">
+                <div className="reader-column">
+                    {/* Render the new PdfViewer component */}
+                    <PdfViewer 
+                        fileUrl={fileUrl} 
+                        onPageChange={handlePageChange}
+                        onDocumentLoad={handleDocumentLoad}
+                    />
+                     <button 
+                        onClick={handleGenerateQuiz}
+                        disabled={isGeneratingQuiz || !currentPageText}
+                        className="generate-page-quiz-btn"
+                    >
+                        {isGeneratingQuiz ? 'Generating...' : 'Generate Quiz for This Page'}
+                    </button>
+                </div>
+
+                <div className="quiz-column">
+                    {isGeneratingQuiz && (
+                        <div className="quiz-placeholder text-center">
+                            <h4>Generating Quiz...</h4>
+                        </div>
+                    )}
+                    {quizError && (
+                         <div className="quiz-placeholder text-center">
+                            <h4 style={{color: 'red'}}>Error</h4>
+                            <p>{quizError}</p>
+                        </div>
+                    )}
+                    {quizData && (
+                        <QuizFlow 
+                            initialQuizData={quizData} 
+                            sourceText={currentPageText}
+                            onFlowComplete={() => setQuizData(null)}
+                        />
+                    )}
+                    {!isGeneratingQuiz && !quizError && !quizData && (
+                         <div className="quiz-placeholder text-center">
+                            <h4>Quiz Area</h4>
+                            <p>Generate a quiz for Page {totalPages > 0 ? '1' : '...'} to begin.</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
