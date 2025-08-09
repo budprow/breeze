@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api';
 import QuizFlow from '../QuizFlow';
 import PdfViewer from './PdfViewer'; // Import the new PDF Viewer
@@ -28,16 +28,16 @@ function ActiveReader() {
     }, []);
 
     // Callback function to get the extracted text from the PdfViewer
-    const handlePageChange = (text) => {
+    const handlePageChange = useCallback((text) => {
         setCurrentPageText(text);
         setQuizData(null); // Clear old quiz data when page changes
         setQuizError('');
-    };
+    }, []);
     
     // Callback function to get the total number of pages
-    const handleDocumentLoad = (numPages) => {
+    const handleDocumentLoad = useCallback((numPages) => {
       setTotalPages(numPages);
-    }
+    }, []);
 
     const handleGenerateQuiz = async () => {
         if (!currentPageText) {

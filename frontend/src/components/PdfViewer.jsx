@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
+// --- FIX #1: The correct import for the text layer rendering function ---
+import { renderTextLayer } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import './PdfViewer.css';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+// Set the worker source for the library
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 function PdfViewer({ fileUrl, onPageChange, onDocumentLoad }) {
   const canvasRef = useRef(null);
@@ -14,10 +19,12 @@ function PdfViewer({ fileUrl, onPageChange, onDocumentLoad }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [renderTask, setRenderTask] = useState(null);
+  const renderTask = useRef(null); // Use a ref to hold the render task
 
+  // Effect to load the PDF document once when the component mounts or fileUrl changes
   useEffect(() => {
     const loadPdf = async () => {
+      if (!fileUrl) return;
       try {
         const loadingTask = pdfjsLib.getDocument(fileUrl);
         const loadedPdf = await loadingTask.promise;
@@ -29,56 +36,61 @@ function PdfViewer({ fileUrl, onPageChange, onDocumentLoad }) {
         setError("Could not load the PDF. It may be corrupted or inaccessible.");
       }
     };
-    if (fileUrl) {
-      loadPdf();
-    }
+    loadPdf();
   }, [fileUrl, onDocumentLoad]);
 
+  // Effect to render a page whenever the PDF document or current page number changes
   useEffect(() => {
     if (!pdf) return;
 
-    if (renderTask) {
-      renderTask.cancel();
+    // Cancel any previous render task to prevent race conditions and errors
+    if (renderTask.current) {
+      renderTask.current.cancel();
     }
 
     const renderPage = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const page = await pdf.getPage(currentPage);
         const viewport = page.getViewport({ scale: 1.5 });
+        
+        // Prepare canvas for rendering
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        
-        const textLayerDiv = textLayerRef.current;
-        textLayerDiv.style.width = `${viewport.width}px`;
-        textLayerDiv.style.height = `${viewport.height}px`;
 
-        const newRenderTask = page.render({
+        // Render the visual PDF page onto the canvas
+        renderTask.current = page.render({
           canvasContext: context,
           viewport: viewport,
         });
-        
-        setRenderTask(newRenderTask);
-        await newRenderTask.promise;
-        
+        await renderTask.current.promise;
+
+        // Prepare the text layer div
+        const textLayerDiv = textLayerRef.current;
+        textLayerDiv.innerHTML = ''; // Clear previous content
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+
+        // Get the text content from the page
         const textContent = await page.getTextContent();
-        
-        textLayerDiv.innerHTML = '';
-        
-        // --- THIS IS THE FIX ---
-        // We call renderTextLayer directly from the viewer module, without 'new'.
-        await pdfjsViewer.renderTextLayer({
-          textContentSource: textContent,
-          container: textLayerDiv,
-          viewport: viewport,
+
+        // --- FIX #2: Call the correctly imported renderTextLayer function ---
+        // This is the modern, correct API call.
+        await renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: viewport,
         }).promise;
         // --- END OF FIX ---
 
+        // Pass the extracted text up to the parent `ActiveReader` component
         onPageChange(textContent.items.map(item => item.str).join(' '));
 
       } catch (err) {
+        // We ignore the "RenderingCancelledException" as it's an expected part of the logic
         if (err.name !== 'RenderingCancelledException') {
           console.error("Error rendering page:", err);
           setError("Failed to render this page.");
@@ -89,20 +101,14 @@ function PdfViewer({ fileUrl, onPageChange, onDocumentLoad }) {
     };
 
     renderPage();
-    
-    return () => {
-      if (renderTask) {
-        renderTask.cancel();
-      }
-    };
-    
+
   }, [pdf, currentPage, onPageChange]);
-  
+
   const goToPrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
   const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    return <div className="error-message" style={{ color: 'red', textAlign: 'center' }}>{error}</div>;
   }
 
   return (
