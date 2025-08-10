@@ -2,195 +2,87 @@
   padding: 20px;
   max-width: 800px;
   margin: 0 auto;
+  background-color: #ffffff; /* White background */
 }
 
 .dashboard-section {
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
+  margin-top: 30px;
+  padding: 25px;
+  border: 1px solid #dee2e6; /* Simple border */
+  border-radius: 8px;
+  background-color: #ffffff; /* Ensure white background */
 }
-
-/* === Uploader and Quiz Generation Styles (Merged) === */
 
 .explanation-box {
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background-color: #ffffff; /* White background */
+  border: 1px solid #dee2e6; /* Simple border */
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.explanation-box h2 {
-  margin-top: 0;
-  color: #343a40;
-}
-
-.upload-step {
-  width: 100%;
-  margin-bottom: 25px;
-}
-
-.upload-step h3 {
-  border-bottom: 2px solid #eee;
-  padding-bottom: 10px;
   margin-bottom: 20px;
   text-align: center;
-  color: #333;
+}
+
+.explanation-box h2, .dashboard-section h3 {
+  margin-top: 0;
+  color: #000000; /* Black text */
+  text-align: center;
+  margin-bottom: 20px;
 }
 
 .uploader-label {
   display: block;
   padding: 12px;
-  background-color: #e9ecef;
-  border: 2px dashed #dee2e6;
+  background-color: #ffffff;
+  border: 2px dashed #ced4da;
   border-radius: 5px;
   cursor: pointer;
   margin-bottom: 15px;
   text-align: center;
   font-weight: bold;
+  color: #000000; /* Black text */
 }
 
-.file-list-preview {
-    list-style-type: none;
-    padding: 0;
-    margin: 10px 0;
-}
-
-.file-list-preview li {
-    background-color: #f8f9fa;
-    padding: 8px;
-    border-radius: 5px;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
-    border: 1px solid #e9ecef;
-}
-
-.refinement-container {
-  margin-bottom: 20px;
-}
-
-.refinement-input {
-  width: 100%;
-  padding: 15px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 1rem;
-  line-height: 1.6;
-  box-sizing: border-box;
-  min-height: 100px;
-}
-
-.process-button {
-  width: 100%;
-  padding: 12px;
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: white;
-  background-color: #28a745;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.process-button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-}
-
-.progress-bar-container {
-  width: 100%;
-  height: 24px;
-  background-color: #e9ecef;
-  border-radius: 5px;
-  margin-top: 15px;
-}
-
-.progress-bar {
-  height: 100%;
-  background-color: #007bff;
-  color: white;
-  text-align: center;
-  line-height: 24px;
-  border-radius: 5px;
-  transition: width 0.3s ease-in-out;
-}
-
-
-/* === Document and Quiz List Styles === */
-
-.document-list {
-  margin-top: 20px;
-}
 .document-list ul {
   list-style-type: none;
   padding: 0;
 }
+
 .document-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #dee2e6; /* Simple border */
   border-radius: 5px;
   margin-bottom: 10px;
+  background-color: #ffffff;
 }
+
 .document-actions {
   display: flex;
   gap: 10px;
 }
+
 .action-btn {
   padding: 8px 12px;
   border: none;
   border-radius: 5px;
   cursor: pointer;
-  color: white;
+  color: white; /* White text for all action buttons */
   font-size: 14px;
+  font-weight: bold;
 }
-.generate-btn {
-  background-color: #007bff;
+
+.action-btn.generate-btn {
+  background-color: #007bff; /* Simple Blue */
 }
-.delete-btn {
-  background-color: #dc3545;
+
+.action-btn.delete-btn {
+  background-color: #dc3545; /* Simple Red */
 }
-.view-btn {
-  background-color: #17a2b8;
-}
+
 .no-documents {
   text-align: center;
   margin-top: 20px;
-  color: #888;
-}
-
-/* Add these new styles to your existing Dashboard.css */
-
-.file-list-container {
-  margin-top: 20px;
-  text-align: left;
-}
-
-.group-name-input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  margin-bottom: 15px;
-  box-sizing: border-box;
-  font-size: 1rem;
-}
-
-.file-list-preview {
-    list-style-type: none;
-    padding: 0;
-    margin: 10px 0;
-}
-
-.file-list-preview li {
-    background-color: #f8f9fa;
-    padding: 8px;
-    border-radius: 5px;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
-    border: 1px solid #e9ecef;
+  color: #6c757d;
 }

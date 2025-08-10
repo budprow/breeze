@@ -3,7 +3,7 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: #f4f7f6;
+  background-color: #f8f9fa; /* A very light grey background */
   font-family: sans-serif;
 }
 
@@ -12,20 +12,21 @@
   max-width: 400px;
   padding: 40px;
   background: white;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  border: 1px solid #dee2e6; /* Simple border */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   text-align: center;
 }
 
 .auth-card h2 {
   margin-bottom: 10px;
   font-size: 24px;
-  color: #333;
+  color: #000000; /* Black text */
 }
 
 .auth-subtitle {
   margin-bottom: 30px;
-  color: #888;
+  color: #000000; /* Black text */
 }
 
 .input-group {
@@ -37,15 +38,17 @@
   display: block;
   margin-bottom: 5px;
   font-weight: bold;
-  color: #555;
+  color: #000000; /* Black text */
 }
 
 .input-group input {
   width: 100%;
   padding: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid #ced4da; /* Simple border */
   border-radius: 5px;
   box-sizing: border-box;
+  background-color: #ffffff;
+  color: #000000;
 }
 
 .auth-button, .guest-button {
@@ -55,70 +58,36 @@
   border: none;
   font-size: 16px;
   font-weight: bold;
+  color: white; /* White text */
   cursor: pointer;
-  transition: background-color 0.2s;
 }
 
 .auth-button {
-  background-color: #007bff;
-  color: white;
+  background-color: #007bff; /* Simple Blue */
   margin-bottom: 15px;
 }
 
-.auth-button:hover {
-  background-color: #0056b3;
-}
-
 .guest-button {
-  background-color: #6c757d;
-  color: white;
-}
-
-.guest-button:hover {
-  background-color: #5a6268;
+  background-color: #6c757d; /* Simple Grey */
 }
 
 .toggle-auth {
   margin-top: 20px;
   font-size: 14px;
+  color: #000000; /* Black text */
 }
 
 .toggle-button {
   background: none;
   border: none;
-  color: #007bff;
+  color: #007bff; /* Simple Blue */
   font-weight: bold;
   cursor: pointer;
   padding: 0 5px;
 }
 
 .error-message {
-  color: #dc3545;
+  color: #dc3545; /* Simple Red */
   margin-top: 15px;
   font-size: 14px;
-}
-
-.separator {
-  margin: 20px 0;
-  color: #ccc;
-  text-align: center;
-  font-weight: bold;
-}
-
-.secondary-button {
-  width: 100%;
-  padding: 12px;
-  border-radius: 5px;
-  border: 1px solid #007bff;
-  background-color: white;
-  color: #007bff;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 10px;
-}
-
-.secondary-button:hover {
-  background-color: #e7f1ff;
 }

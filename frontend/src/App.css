@@ -1,13 +1,19 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #ffffff; /* White background */
+  color: #000000; /* Black text */
+}
+
 .app-container {
-  padding: 20px; /* Padding for mobile */
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-.app-container h1 {
-  text-align: center;
-  margin-bottom: 30px;
 }
 
 .loading-screen {
@@ -21,20 +27,28 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
-  background-color: #333;
-  color: white;
+  padding: 15px 30px;
+  background-color: #ffffff; /* White background */
+  color: #000000; /* Black text */
+  border-bottom: 1px solid #dee2e6; /* Simple border */
+}
+
+.app-header h1 {
+  margin: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .logout-button {
-  padding: 5px 10px;
-  background-color: #dc3545;
-  color: white;
+  padding: 8px 12px;
+  background-color: #dc3545; /* Simple Red */
+  color: white; /* White text */
   border: none;
   border-radius: 5px;
   cursor: pointer;
-}
-
-.logout-button:hover {
-  background-color: #c82333;
+  font-weight: bold;
 }
