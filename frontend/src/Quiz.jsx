@@ -59,7 +59,7 @@ function Quiz({
     const durationInSeconds = Math.round((endTime - startTime) / 1000);
 
     try {
-      await api.post('/save-shared-quiz-result', {
+      await api.post('/api/save-shared-quiz-result', {
         quizId: isSharedQuizFlow.originalQuizId,
         score: currentScore,
         quizData: quizData,

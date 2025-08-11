@@ -6,18 +6,13 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { onRequest } = require("firebase-functions/v2/https");
 const { FieldValue } = require("firebase-admin/firestore");
 const quizGenerator = require("./services/quizGenerator.cjs");
+const pdf = require("pdf-parse");
 require("dotenv").config();
 
-// --- ADD THIS BLOCK TO CONNECT TO EMULATORS ---
-// When the Firebase emulators are running, they set this environment variable.
 if (process.env.FUNCTIONS_EMULATOR === "true") {
   console.log("Local emulator detected! Connecting Admin SDK to emulators.");
-  // Point the Admin SDK to the local Storage emulator
   process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
-  // Note: The Admin SDK automatically detects the Auth and Firestore emulators
-  // when FUNCTIONS_EMULATOR is true, but Storage needs to be set explicitly.
 }
-// --- END OF FIX ---
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -31,8 +26,23 @@ let genAI;
 if (geminiApiKey) {
   genAI = new GoogleGenerativeAI(geminiApiKey);
 } else {
-  console.warn("GEMINI_API_KEY not found. The /generate-quiz endpoint will not work.");
+  console.warn("GEMINI_API_KEY not found. Some endpoints will not work.");
 }
+
+const parseJsonFromAiResponse = (rawText) => {
+  const match = rawText.match(/```json\n([\s\S]*?)\n```/);
+  if (!match || !match[1]) {
+    console.error("Could not find a JSON code block in the AI response.");
+    return null;
+  }
+  try {
+    const sanitizedJson = match[1].replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+    return JSON.parse(sanitizedJson);
+  } catch (error) {
+    console.error("Failed to parse JSON from the AI response:", error);
+    return null;
+  }
+};
 
 const verifyFirebaseToken = async (req, res, next) => {
   const idToken = req.headers.authorization?.split("Bearer ")[1];
@@ -47,6 +57,59 @@ const verifyFirebaseToken = async (req, res, next) => {
     res.status(403).send("Could not verify token");
   }
 };
+
+app.post("/documents/process", verifyFirebaseToken, async (req, res) => {
+  const { documentId, filePath } = req.body;
+  if (!documentId || !filePath) {
+    return res.status(400).send('Missing documentId or filePath.');
+  }
+  if (!genAI) {
+    return res.status(500).send("Server is not configured with a Gemini API key.");
+  }
+  try {
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(filePath);
+    const [fileBuffer] = await file.download();
+    const data = await pdf(fileBuffer);
+    
+    // --- THIS IS THE FIX ---
+    // 1. Split the document text into pages based on the form feed character.
+    const pagesText = data.text.split('\f').filter(page => page.trim().length > 0);
+    // 2. Join the pages with a clear separator for the AI.
+    const fullTextWithSeparators = pagesText.join('\n\n--- Page Break ---\n\n');
+
+    const prompt = `
+      Read the following text, which is separated by "--- Page Break ---". 
+      Identify the 5-10 most important key concepts in the entire document.
+      For each concept, return the full, exact sentence in which it is explained.
+      Format the output as a single JSON object inside a \`\`\`json code block.
+      The JSON object should map the page number (as a string, starting from "1") to an array of the key sentences found on that page.
+      Use the "--- Page Break ---" separators to determine the page number for each sentence.
+      Example: { "1": ["Sentence one...", "Sentence two..."], "2": ["Sentence three..."] }
+      Here is the text to analyze:
+      ---
+      ${fullTextWithSeparators}
+      ---
+    `;
+    
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    const keyConcepts = parseJsonFromAiResponse(result.response.text());
+    
+    if (!keyConcepts) {
+      throw new Error('Failed to parse key concepts from AI response.');
+    }
+    
+    const docRef = db.collection('users').doc(req.user.uid).collection('documents').doc(documentId);
+    await docRef.update({ keyConcepts });
+    
+    res.status(200).send('Document processed successfully.');
+  } catch (error) {
+    console.error("Error processing document:", error);
+    res.status(500).send("An error occurred while processing the document.");
+  }
+});
+
 app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   if (!genAI) {
     return res.status(500).send("Server is not configured with a Gemini API key.");
@@ -65,6 +128,7 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// (The rest of your routes: /save-quiz, /save-shared-quiz-result, etc. remain here)
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
   const { quizData, score, documentName, documentId, answers } = req.body;
   const userId = req.user.uid;
@@ -80,8 +144,7 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
       documentName: documentName,
       score: score,
       totalQuestions: quizData.length,
-
-     quizData: quizData,
+      quizData: quizData,
       completedAt: FieldValue.serverTimestamp(),
       answers: answers
     });
@@ -91,6 +154,7 @@ app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
     res.status(500).send("Server error while saving quiz.");
   }
 });
+
 app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
   const { quizId, score, quizData, answers, duration } = req.body;
   const { uid, email } = req.user;
@@ -118,14 +182,14 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
     await db.runTransaction(async (transaction) => {
       const quizDocData = originalQuizSnap.data();
       const limit = quizDocData.attemptLimit || 10;
-const userAttemptsQuery = resultsRef.where('takerId', '==', uid);
+      const userAttemptsQuery = resultsRef.where('takerId', '==', uid);
       const userAttemptsSnap = await transaction.get(userAttemptsQuery);
-if (userAttemptsSnap.size >= limit) {
+      if (userAttemptsSnap.size >= limit) {
         throw new Error("You have reached the maximum number of attempts.");
-}
+      }
 
       const newResultRef = resultsRef.doc();
-transaction.set(newResultRef, {
+      transaction.set(newResultRef, {
         takerId: uid,
         takerEmail: email,
         score: score,
@@ -134,9 +198,9 @@ transaction.set(newResultRef, {
         answers: answers,
         duration: duration
       });
-if (takerQuizSnap.empty) {
+      if (takerQuizSnap.empty) {
         const newTakerQuizRef = db.collection('quizzes').doc();
-transaction.set(newTakerQuizRef, {
+        transaction.set(newTakerQuizRef, {
           ownerId: uid,
           documentId: quizDocData.documentId,
           documentName: quizDocData.documentName,
@@ -145,31 +209,30 @@ transaction.set(newTakerQuizRef, {
           quizData: quizData,
           completedAt: FieldValue.serverTimestamp(),
           originalQuizId: quizId,
-          answers:
-answers,
+          answers: answers,
           duration: duration
         });
-} else {
+      } else {
         const takerQuizDocRef = takerQuizSnap.docs[0].ref;
-transaction.update(takerQuizDocRef, {
+        transaction.update(takerQuizDocRef, {
           score: score,
           completedAt: FieldValue.serverTimestamp(),
           answers: answers,
           duration: duration
         });
-}
+      }
     });
 
     res.status(201).send("Quiz result saved successfully.");
   } catch (error) {
     console.error("Error saving shared quiz result:", error.message);
-if (error.message.includes("maximum number of attempts")) {
+    if (error.message.includes("maximum number of attempts")) {
       return res.status(403).send(error.message);
-}
+    }
     res.status(500).send("Could not save your quiz result due to a server error.");
   }
 });
-// ** THE FIX: New endpoint to handle name updates **
+
 app.post('/update-quiz-name', verifyFirebaseToken, async (req, res) => {
   const { quizId, newName } = req.body;
   const userId = req.user.uid;
@@ -197,6 +260,7 @@ app.post('/update-quiz-name', verifyFirebaseToken, async (req, res) => {
     res.status(500).send("Server error while updating quiz name.");
   }
 });
+
 app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     const { restaurantId } = req.body;
     const managerId = req.user.uid;
@@ -216,4 +280,5 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
       res.status(500).send('Server error while creating invite.');
     }
   });
+
 exports.api = onRequest({ secrets: ["GEMINI_API_KEY"] }, app);

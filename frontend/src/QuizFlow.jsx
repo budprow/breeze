@@ -19,7 +19,7 @@ function QuizFlow({ initialQuizData, sourceText, onFlowComplete, isGuest }) {
             return;
         }
         try {
-            await api.post('/save-quiz', { quizData });
+            await api.post('/api/save-quiz', { quizData });
             alert("Quiz saved successfully!");
             onFlowComplete(); // Go back to dashboard
         } catch (error) {
@@ -31,7 +31,7 @@ function QuizFlow({ initialQuizData, sourceText, onFlowComplete, isGuest }) {
     const handleRegenerate = async () => {
         setIsGenerating(true);
         try {
-            const response = await api.post('/generate-quiz', {
+            const response = await api.post('/api/generate-quiz', {
                 text: sourceText,
                 refinementText: refinement,
             });

@@ -1,17 +1,11 @@
 import axios from 'axios';
 import { auth } from './firebase';
 
-const isLocal = window.location.hostname === 'localhost';
-
-const api = axios.create({
-  // --- THIS IS THE FIX ---
-  // When running locally, we now use a relative path. The Vite proxy in
-  // vite.config.js will catch this and forward it to http://localhost:3001.
-  // When deployed, it will correctly call the production URL.
-  baseURL: isLocal
-    ? '/api' 
-    : 'https://us-central1-breeze-9c703.cloudfunctions.net/api',
-});
+// --- THIS IS THE FIX ---
+// We remove the baseURL. All API calls in the components will now
+// use the full path (e.g., '/api/generate-quiz'), which works reliably
+// with Vite's proxy and the deployed functions URL.
+const api = axios.create();
 
 // This automatically adds the user's auth token to every request
 api.interceptors.request.use(async (config) => {

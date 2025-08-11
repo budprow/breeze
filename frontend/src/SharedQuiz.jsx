@@ -60,7 +60,7 @@ function SharedQuiz({ quizId, attemptLimit }) {
     const durationInSeconds = Math.round((endTime - startTime) / 1000);
 
     try {
-      await api.post('/save-shared-quiz-result', {
+      await api.post('/api/save-shared-quiz-result', {
         quizId: quizId,
         score: score,
         quizData: quizData,

@@ -11,7 +11,7 @@ function InviteManager({ restaurantId }) {
         setIsLoading(true);
         setError('');
         try {
-            const response = await api.post('/create-invite', {
+            const response = await api.post('/api/create-invite', {
                 restaurantId: restaurantId,
             });
 

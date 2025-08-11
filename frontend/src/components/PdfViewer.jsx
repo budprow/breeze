@@ -1,31 +1,38 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-// --- FIX #1: Directly import the TextLayer class from its specific module ---
-import { TextLayer } from 'pdfjs-dist/web/pdf_viewer.mjs';
+// --- FIX #1: Import the viewer module for its side-effects ---
+// This will attach the necessary components, like TextLayer, to the pdfjsLib object.
+import 'pdfjs-dist/web/pdf_viewer.mjs';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import './PdfViewer.css';
 
+// Set the workerSrc for pdfjs-dist
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick }) {
   const canvasRef = useRef(null);
   const textLayerRef = useRef(null);
-  const renderTask = useRef(null); // Use a ref to prevent re-renders from affecting the task
+  const renderTask = useRef(null);
 
-  // Use useCallback to prevent the function from being recreated on every render
   const stableOnIconClick = useCallback(onIconClick, [onIconClick]);
 
   useEffect(() => {
-    if (!pdf) return;
-
-    // Cancel any previous render task to avoid race conditions
-    if (renderTask.current) {
-      renderTask.current.cancel();
+    if (!pdf) {
+      return;
     }
 
+    let isCancelled = false;
+
     const renderPage = async () => {
+      // Ensure any previous render task is cancelled before starting a new one.
+      if (renderTask.current) {
+        renderTask.current.cancel();
+      }
+
       try {
         const page = await pdf.getPage(pageNumber);
+        if (isCancelled) return;
+
         const viewport = page.getViewport({ scale: 1.5 });
         
         const canvas = canvasRef.current;
@@ -36,52 +43,54 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick 
         const textLayerDiv = textLayerRef.current;
         textLayerDiv.style.width = `${viewport.width}px`;
         textLayerDiv.style.height = `${viewport.height}px`;
+        textLayerDiv.innerHTML = ''; // Clear previous content
 
-        // Render the visual PDF page
+        // Start the rendering of the page onto the canvas
         renderTask.current = page.render({ canvasContext: context, viewport: viewport });
         await renderTask.current.promise;
+        if (isCancelled) return;
 
-        // Get text content for the selectable layer
         const textContent = await page.getTextContent();
-        textLayerDiv.innerHTML = ''; // Clear previous layer
+        if (isCancelled) return;
 
-        // --- FIX #2: Create a NEW instance of the imported TextLayer class ---
-        const textLayer = new TextLayer({
+        // --- FIX #2: Access TextLayer from the main pdfjsLib object ---
+        const textLayer = new pdfjsLib.TextLayer({
           textContentSource: textContent,
           container: textLayerDiv,
           viewport: viewport,
         });
 
-        // Render the text layer. Note: .render() is synchronous and doesn't return a promise.
+        // The .render() method on the instance is synchronous.
         textLayer.render();
         
         // --- Logic to find sentences and add icons ---
         if (keySentences && keySentences.length > 0 && textLayerRef.current) {
-          const textLayerSpans = Array.from(textLayerDiv.querySelectorAll('span'));
-          const fullPageText = textLayerSpans.map(span => span.textContent).join('');
+          const textLayerSpans = Array.from(textLayerDiv.querySelectorAll('span[role="presentation"]'));
+          const normalize = (str) => str.replace(/\s+/g, ' ').trim();
+          const pageTextContent = normalize(textLayerSpans.map(span => span.textContent).join(' '));
 
           keySentences.forEach(sentence => {
-            const normalizedSentence = sentence.trim();
-            const sentenceIndex = fullPageText.indexOf(normalizedSentence);
+            const normalizedSentence = normalize(sentence);
+            const sentenceIndex = pageTextContent.indexOf(normalizedSentence);
 
             if (sentenceIndex !== -1) {
               let charCount = 0;
               let firstSpan = null;
 
               for (const span of textLayerSpans) {
-                const spanTextLength = span.textContent.length;
-                if (charCount + spanTextLength > sentenceIndex && firstSpan === null) {
+                const normalizedSpanText = normalize(span.textContent);
+                if (charCount + normalizedSpanText.length > sentenceIndex) {
                   firstSpan = span;
                   break;
                 }
-                charCount += spanTextLength;
+                charCount += normalizedSpanText.length + 1;
               }
 
               if (firstSpan) {
                 const icon = document.createElement('span');
                 icon.textContent = '✨';
                 icon.className = 'key-concept-icon';
-                icon.style.left = `${parseFloat(firstSpan.style.left) - 20}px`; // Position to the left
+                icon.style.left = `${parseFloat(firstSpan.style.left) - 20}px`;
                 icon.style.top = firstSpan.style.top;
                 icon.onclick = () => stableOnIconClick(sentence);
                 textLayerDiv.appendChild(icon);
@@ -89,7 +98,7 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick 
             }
           });
         }
-
+        
         onPageRendered(textContent.items.map(item => item.str).join(' '));
       } catch (err) {
         if (err.name !== 'RenderingCancelledException') {
@@ -100,6 +109,12 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick 
 
     renderPage();
 
+    return () => {
+      isCancelled = true;
+      if (renderTask.current) {
+        renderTask.current.cancel();
+      }
+    };
   }, [pdf, pageNumber, onPageRendered, keySentences, stableOnIconClick]);
 
   return (

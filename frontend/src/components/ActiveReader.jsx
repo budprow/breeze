@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { useDocumentData } from 'react-firebase-hooks/firestore';
 import { doc } from 'firebase/firestore';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { getStorage, ref, getDownloadURL } from 'firebase/storage'; // Keep this import
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { db, auth } from '../firebase';
 import api from '../api';
 import QuizFlow from '../QuizFlow';
@@ -18,21 +18,14 @@ function ActiveReader() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [currentPageText, setCurrentPageText] = useState('');
-
-    // State for the main, page-level quiz
     const [mainQuizData, setMainQuizData] = useState(null);
     const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
     const [quizError, setQuizError] = useState('');
-
-    // State for the pop-up micro-quiz
     const [microQuizData, setMicroQuizData] = useState(null);
     const [isGeneratingMicroQuiz, setIsGeneratingMicroQuiz] = useState(false);
     const [microQuizError, setMicroQuizError] = useState('');
-    
     // Use the useAuthState hook to reactively get the user's auth state
     const [user, authLoading, authError] = useAuthState(auth);
-
-    // Fetch document data once we have a user and a documentId
     const [docValue, docLoading, docError] = useDocumentData(
         user && documentId ? doc(db, 'users', user.uid, 'documents', documentId) : null
     );
@@ -75,7 +68,8 @@ function ActiveReader() {
         setMicroQuizData(null);
         setMicroQuizError('');
         try {
-            const response = await api.post('/generate-quiz', { text: sentence });
+            // --- FIX: Add /api prefix ---
+            const response = await api.post('/api/generate-quiz', { text: sentence });
             setMicroQuizData(response.data);
         } catch (err) {
             console.error("Error generating micro-quiz:", err);
@@ -90,7 +84,8 @@ function ActiveReader() {
         setMainQuizData(null);
         setQuizError('');
         try {
-            const response = await api.post('/generate-quiz', { text: currentPageText });
+            // --- FIX: Add /api prefix ---
+            const response = await api.post('/api/generate-quiz', { text: currentPageText });
             setMainQuizData(response.data);
         } catch (err) {
             console.error("Error generating main quiz:", err);
@@ -107,16 +102,11 @@ function ActiveReader() {
         docValue?.keyConcepts?.[currentPage.toString()] || []
     ), [docValue, currentPage]);
 
-    // --- Improved Loading and Error Handling ---
-    if (authLoading) {
-        return <div className="loading-screen"><h1>Authenticating...</h1></div>;
-    }
-    if (authError || docError) {
-        return <div className="loading-screen"><h1>Error: {authError?.message || docError?.message}</h1></div>;
-    }
-    // Show loading screen while fetching document metadata or the PDF file itself
-    if (docLoading || (docValue && !pdf)) {
+    if (authLoading || docLoading || (docValue && !pdf) && !docError) {
         return <div className="loading-screen"><h1>Loading Document...</h1></div>;
+    }
+    if (authError || docError || (!docValue && !docLoading)) {
+        return <div className="loading-screen"><h1>Error: {authError?.message || docError?.message}</h1></div>;
     }
     if (!user) {
         return <div className="loading-screen"><h1>Please log in to view this document.</h1></div>;
@@ -134,7 +124,6 @@ function ActiveReader() {
                         keySentences={keySentencesForPage}
                         onIconClick={handleIconClick}
                     />
-                    {/* --- THIS IS THE RESTORED UI --- */}
                     <div className="reader-controls">
                         <button onClick={goToPrevPage} disabled={currentPage <= 1} className="nav-button">
                           Previous
@@ -165,7 +154,6 @@ function ActiveReader() {
                 </div>
             </div>
 
-            {/* --- MICRO-QUIZ MODAL --- */}
             {(isGeneratingMicroQuiz || microQuizData || microQuizError) && (
                 <div className="modal-backdrop" onClick={() => { setMicroQuizData(null); setMicroQuizError(''); }}>
                     <div className="quiz-container" onClick={(e) => e.stopPropagation()}>
