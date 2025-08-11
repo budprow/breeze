@@ -129,7 +129,7 @@ function Dashboard({ user }) {
                                         {/* The Read button is only shown when its URL is ready */}
                                         {url && url !== 'error' && (
                                             <a 
-                                                href={`/read/${encodeURIComponent(url)}`}
+                                                href={`/read/${doc.id}`}
                                                 className="action-btn"
                                                 style={{backgroundColor: '#007bff'}}
                                             >

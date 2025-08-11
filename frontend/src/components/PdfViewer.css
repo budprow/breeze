@@ -29,3 +29,31 @@
   cursor: text;
   transform-origin: 0% 0%;
 }
+
+/* Add these new styles to your PdfViewer.css file */
+.key-concept-icon {
+  position: absolute;
+  cursor: pointer;
+  font-size: 1.2rem;
+  opacity: 0.8;
+  transition: transform 0.2s;
+}
+
+.key-concept-icon:hover {
+  transform: scale(1.3);
+  opacity: 1;
+}
+
+/* Styles for the Micro-Quiz Modal */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}

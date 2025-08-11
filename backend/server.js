@@ -8,19 +8,15 @@ const pdf = require('pdf-parse');
 const app = express();
 const port = 3001;
 
-// This environment variable MUST be set before initializeApp() is called.
 if (process.env.NODE_ENV === 'development') {
   console.log('Development environment detected. Pointing to Storage Emulator.');
   process.env['FIREBASE_STORAGE_EMULATOR_HOST'] = '127.0.0.1:9199';
 }
 
-
-// --- MIDDLEWARE CONFIGURATION ---
 app.use(cors({ origin: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Firebase Admin Initialization ---
 try {
   const serviceAccount = require('./serviceAccountKey.json');
   admin.initializeApp({
@@ -33,15 +29,12 @@ try {
 }
 const firestore = admin.firestore();
 
-// --- Gemini AI Initialization ---
 const geminiApiKey = process.env.GEMINI_API_KEY;
 if (!geminiApiKey) {
   console.warn("Gemini API key not found. Quiz generation will fail.");
 }
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-// --- HELPER/MIDDLEWARE FUNCTIONS ---
 
 const verifyFirebaseToken = async (req, res, next) => {
   const idToken = req.headers.authorization?.split('Bearer ')[1];
@@ -71,37 +64,23 @@ const parseJsonFromAiResponse = (rawText) => {
   }
 };
 
-
 // --- ROUTES ---
-// Find this existing route in your backend/server.js file
-// and add `verifyFirebaseToken` as shown below.
 
+// ** THIS IS THE ROUTE THAT WAS MISSING **
 app.post('/api/generate-quiz', verifyFirebaseToken, async (req, res) => {
     const { text, refinementText } = req.body;
     if (!text) {
         return res.status(400).send("No text provided for quiz generation.");
     }
-    if (!geminiApiKey) {
-        return res.status(500).send("Backend is not configured with a Gemini API key.");
-    }
-
     const prompt = `
       Based on the following text, generate a multiple-choice quiz with 5 to 8 questions.
       Each question must have exactly 4 answer options, with only one being correct.
       ${refinementText ? `Follow these specific instructions: "${refinementText}".` : ""}
       Format the output as a single JSON object inside a \`\`\`json code block.
       The JSON object should have a single key "questions", which is an array.
-      Each object in the "questions" array should have:
-      - a "question" key with the question text (string).
-      - an "options" key with an array of 4 answer strings.
-      - a "correctAnswer" key with the string of the correct answer, which must exactly match one of the strings in the "options" array.
-
-      Here is the text to analyze:
-      ---
-      ${text}
-      ---
+      Each object in the "questions" array should have: a "question" key, an "options" key with an array of 4 strings, and a "correctAnswer" key.
+      Here is the text to analyze: --- ${text} ---
     `;
-
     try {
         const result = await model.generateContent(prompt);
         const quizData = parseJsonFromAiResponse(result.response.text());
@@ -115,6 +94,41 @@ app.post('/api/generate-quiz', verifyFirebaseToken, async (req, res) => {
     }
 });
 
+app.post('/api/documents/process', verifyFirebaseToken, async (req, res) => {
+  const { documentId, filePath } = req.body;
+  if (!documentId || !filePath) {
+    return res.status(400).send('Missing documentId or filePath.');
+  }
+  try {
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(filePath);
+    const [fileBuffer] = await file.download();
+    const data = await pdf(fileBuffer);
+    const pagesText = data.text.split('\f').filter(page => page.trim().length > 0);
+    const fullText = pagesText.join('\n\n--- Page Break ---\n\n');
+    const prompt = `
+      Read the following text, which is separated by "--- Page Break ---". 
+      Identify the 5-10 most important key concepts in the entire document.
+      For each concept, return the full, exact sentence in which it is explained.
+      Format the output as a single JSON object inside a \`\`\`json code block.
+      The JSON object should map the page number (as a string, starting from "1") to an array of the key sentences found on that page.
+      Example: { "1": ["Sentence one...", "Sentence two..."], "2": ["Sentence three..."] }
+      Here is the text to analyze: --- ${fullText} ---
+    `;
+    const result = await model.generateContent(prompt);
+    const keyConcepts = parseJsonFromAiResponse(result.response.text());
+    if (!keyConcepts) {
+      throw new Error('Failed to parse key concepts from AI response.');
+    }
+    const docRef = firestore.collection('users').doc(req.user.uid).collection('documents').doc(documentId);
+    await docRef.update({ keyConcepts });
+    res.status(200).send('Document processed successfully.');
+  } catch (error) {
+    console.error("Error processing document:", error);
+    res.status(500).send("An error occurred while processing the document.");
+  }
+});
+
 app.post('/api/document/text', async (req, res) => {
     try {
         const { fileUrl } = req.body;
@@ -122,30 +136,19 @@ app.post('/api/document/text', async (req, res) => {
             return res.status(400).json({ error: 'No file URL provided' });
         }
         const bucket = admin.storage().bucket();
-        
-        // --- THIS IS THE CRITICAL CHANGE ---
-        // This new logic correctly handles both live and emulator URLs.
         const decodedUrl = decodeURIComponent(fileUrl);
         const urlObject = new URL(decodedUrl);
         let filePath = urlObject.pathname;
-
-        // The path we need is everything AFTER the '/o/' part of the URL.
         const objectPathIdentifier = '/o/';
         const pathStartIndex = filePath.indexOf(objectPathIdentifier);
-
         if (pathStartIndex === -1) {
-          throw new Error('Invalid file URL format. Could not find object identifier.');
+          throw new Error('Invalid file URL format.');
         }
-
-        // Extract the actual file path.
         filePath = filePath.substring(pathStartIndex + objectPathIdentifier.length);
-        // --- END OF CHANGE ---
-
         const file = bucket.file(filePath);
         const [fileBuffer] = await file.download();
         const data = await pdf(fileBuffer);
         const pages = data.text.split('\f').filter(page => page.trim().length > 0);
-        
         res.status(200).json({ pages });
     } catch (error) {
         console.error("DETAILED ERROR in /api/document/text:", error);
@@ -156,7 +159,7 @@ app.post('/api/document/text', async (req, res) => {
     }
 });
 
-
+// ... (your other routes like /create-invite, etc. remain the same) ...
 app.post('/api/create-invite', verifyFirebaseToken, async (req, res) => {
   const { restaurantId } = req.body;
   const managerId = req.user.uid;
@@ -238,7 +241,6 @@ app.post('/api/mark-invite-used', async (req, res) => {
         res.status(500).send('Server error marking invite as used.');
     }
 });
-
 
 app.listen(port, () => {
   console.log(`Backend server listening on http://localhost:${port}`);
