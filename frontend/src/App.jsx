@@ -7,6 +7,7 @@ import ActiveReader from './components/ActiveReader'; // Import the new componen
 import Auth from './components/auth';
 import Dashboard from './components/Dashboard';
 import SharedQuiz from './SharedQuiz';
+import MyNotes from './components/MyNotes';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
   
   // --- CHANGE #1: Add new state to track the Active Reader URL ---
   const [activeReaderFileUrl, setActiveReaderFileUrl] = useState(null);
+  const [notesDocumentId, setNotesDocumentId] = useState(null);
 
   const [userProfile, profileLoading] = useDocumentData(
     user && !user.isAnonymous ? doc(db, 'users', user.uid) : null
@@ -32,7 +34,12 @@ function App() {
         if (encodedUrl) {
             setActiveReaderFileUrl(decodeURIComponent(encodedUrl));
         }
-    } else {
+    } else if (path.startsWith('/notes/')) {
+        const docId = path.substring(7);
+        if (docId) {
+            setNotesDocumentId(docId);
+        }
+    }else {
         // This is your original logic for handling shared quiz links. It will only
         // run if the URL is NOT an active reader URL.
         const urlParams = new URLSearchParams(window.location.search);
@@ -60,6 +67,7 @@ function App() {
     window.history.pushState({}, '', '/');
     setSharedQuizId(null);
     setActiveReaderFileUrl(null); 
+    setNotesDocumentId(null);
     await signOut(auth);
   };
 
@@ -71,6 +79,10 @@ function App() {
     // If a user is logged in and the activeReaderFileUrl is set, show the reader.
     if (user && activeReaderFileUrl) {
       return <ActiveReader />;
+    }
+
+    if (user && notesDocumentId) {
+        return <MyNotes documentId={notesDocumentId} />;
     }
 
     // The rest of your rendering logic remains exactly the same.

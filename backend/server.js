@@ -129,6 +129,36 @@ app.post('/api/documents/process', verifyFirebaseToken, async (req, res) => {
   }
 });
 
+app.post('/api/highlights', verifyFirebaseToken, async (req, res) => {
+  const { documentId, pageNumber, selectedText } = req.body;
+  const userId = req.user.uid;
+
+  if (!documentId || !pageNumber || !selectedText) {
+    return res.status(400).send('Missing required fields: documentId, pageNumber, or selectedText.');
+  }
+
+  try {
+    const highlightData = {
+      text: selectedText,
+      page: pageNumber,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const highlightRef = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('documents')
+      .doc(documentId)
+      .collection('highlights')
+      .add(highlightData);
+
+    res.status(201).json({ highlightId: highlightRef.id, ...highlightData });
+  } catch (error) {
+    console.error("Error saving highlight:", error);
+    res.status(500).send("An error occurred while saving the highlight.");
+  }
+});
+
 app.post('/api/document/text', async (req, res) => {
     try {
         const { fileUrl } = req.body;

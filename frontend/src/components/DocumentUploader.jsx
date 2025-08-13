@@ -2,7 +2,7 @@ import React from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import api from '../api'; // Import your api instance
+import api from '../api';
 import './DocumentUploader.css';
 
 function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
@@ -37,21 +37,23 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
       });
       console.log("File record saved to Firestore with ID:", docRef.id);
 
-      // --- NEW STEP 3: Trigger the backend processing ---
-      console.log("Triggering backend AI processing for key concepts...");
-      await api.post('/api/documents/process', {
-        documentId: docRef.id,
-        filePath: filePath
-      });
-      console.log("Backend processing triggered successfully!");
-      // --- END OF NEW STEP ---
-
-      alert("File uploaded and processed successfully!");
+      alert("File uploaded successfully! The AI is now analyzing it for key concepts.");
       onFileChange({ target: { files: [null] } }); 
 
+      // Trigger the backend processing in the background.
+      console.log("Triggering background AI processing for key concepts...");
+      api.post('/api/documents/process', {
+        documentId: docRef.id,
+        filePath: filePath
+      }).then(() => {
+        console.log("Backend processing triggered successfully!");
+      }).catch(error => {
+        console.error("An error occurred during the background AI processing:", error);
+      });
+
     } catch (error) {
-        console.error("An error occurred during the upload process:", error);
-        alert("Upload failed. Please check the console for details.");
+        console.error("An error occurred during the initial upload:", error);
+        alert("Initial upload failed. Please check the console for details.");
     } finally {
         onUpload(false);
     }
@@ -63,6 +65,7 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
       <h3>Upload a Document</h3>
       <label className="uploader-label">
         {file ? `Selected: ${file.name}` : 'Choose Document (PDF)'}
+        {/* This "accept" attribute tells the browser to only allow PDF files */}
         <input type="file" onChange={onFileChange} style={{ display: 'none' }} accept=".pdf" />
       </label>
       

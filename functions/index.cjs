@@ -70,14 +70,14 @@ app.post("/documents/process", verifyFirebaseToken, async (req, res) => {
     const bucket = admin.storage().bucket();
     const file = bucket.file(filePath);
     const [fileBuffer] = await file.download();
-    const data = await pdf(fileBuffer);
-    
-    // --- THIS IS THE FIX ---
-    // 1. Split the document text into pages based on the form feed character.
-    const pagesText = data.text.split('\f').filter(page => page.trim().length > 0);
-    // 2. Join the pages with a clear separator for the AI.
-    const fullTextWithSeparators = pagesText.join('\n\n--- Page Break ---\n\n');
 
+    // Simplified logic to only handle PDFs
+    const data = await pdf(fileBuffer);
+    const fileType = 'pdf';
+
+    const pagesText = data.text.split('\f').filter(page => page.trim().length > 0);
+    const fullTextWithSeparators = pagesText.join('\n\n--- Page Break ---\n\n');
+    
     const prompt = `
       Read the following text, which is separated by "--- Page Break ---". 
       Identify the 5-10 most important key concepts in the entire document.
@@ -101,7 +101,7 @@ app.post("/documents/process", verifyFirebaseToken, async (req, res) => {
     }
     
     const docRef = db.collection('users').doc(req.user.uid).collection('documents').doc(documentId);
-    await docRef.update({ keyConcepts });
+    await docRef.update({ keyConcepts, fileType: fileType });
     
     res.status(200).send('Document processed successfully.');
   } catch (error) {
@@ -128,7 +128,6 @@ app.post("/generate-quiz", verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// (The rest of your routes: /save-quiz, /save-shared-quiz-result, etc. remain here)
 app.post("/save-quiz", verifyFirebaseToken, async (req, res) => {
   const { quizData, score, documentName, documentId, answers } = req.body;
   const userId = req.user.uid;
@@ -172,8 +171,7 @@ app.post("/save-shared-quiz-result", verifyFirebaseToken, async (req, res) => {
       return res.status(404).send("Original quiz not found.");
     }
 
-
-   const takerQuizQuery = db.collection('quizzes')
+    const takerQuizQuery = db.collection('quizzes')
       .where('ownerId', '==', uid)
       .where('originalQuizId', '==', quizId)
       .limit(1);

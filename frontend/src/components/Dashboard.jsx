@@ -136,6 +136,13 @@ function Dashboard({ user }) {
                                                 Read
                                             </a>
                                         )}
+                                        <a 
+                                            href={`/notes/${doc.id}`}
+                                            className="action-btn"
+                                            style={{backgroundColor: '#28a745'}}
+                                        >
+                                            My Notes
+                                        </a>
                                         <button onClick={() => alert('Generate Quiz coming soon!')} className="action-btn generate-btn">
                                             Generate Quiz
                                         </button>

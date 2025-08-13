@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useDocumentData } from 'react-firebase-hooks/firestore';
-import { doc } from 'firebase/firestore';
+import { doc, collection, getDocs } from 'firebase/firestore';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { db, auth } from '../firebase';
@@ -24,7 +24,7 @@ function ActiveReader() {
     const [microQuizData, setMicroQuizData] = useState(null);
     const [isGeneratingMicroQuiz, setIsGeneratingMicroQuiz] = useState(false);
     const [microQuizError, setMicroQuizError] = useState('');
-    // Use the useAuthState hook to reactively get the user's auth state
+    const [highlights, setHighlights] = useState([]);
     const [user, authLoading, authError] = useAuthState(auth);
     const [docValue, docLoading, docError] = useDocumentData(
         user && documentId ? doc(db, 'users', user.uid, 'documents', documentId) : null
@@ -37,6 +37,18 @@ function ActiveReader() {
             setDocumentId(docIdFromUrl);
         }
     }, []);
+
+    useEffect(() => {
+        if (user && documentId) {
+            const fetchHighlights = async () => {
+                const highlightsColRef = collection(db, 'users', user.uid, 'documents', documentId, 'highlights');
+                const snapshot = await getDocs(highlightsColRef);
+                const loadedHighlights = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setHighlights(loadedHighlights);
+            };
+            fetchHighlights();
+        }
+    }, [user, documentId]);
     
     useEffect(() => {
         if (docValue && !pdf) {
@@ -62,13 +74,26 @@ function ActiveReader() {
         setMainQuizData(null);
         setQuizError('');
     }, []);
+
+    const handleSaveHighlight = async (selectedText) => {
+        if (!documentId || !user) return;
+        try {
+            const response = await api.post('/api/highlights', {
+                documentId,
+                pageNumber: currentPage,
+                selectedText,
+            });
+            setHighlights(prev => [...prev, { ...response.data, page: currentPage }]);
+        } catch (error) {
+            console.error("Failed to save highlight:", error);
+        }
+    };
     
     const handleIconClick = useCallback(async (sentence) => {
         setIsGeneratingMicroQuiz(true);
         setMicroQuizData(null);
         setMicroQuizError('');
         try {
-            // --- FIX: Add /api prefix ---
             const response = await api.post('/api/generate-quiz', { text: sentence });
             setMicroQuizData(response.data);
         } catch (err) {
@@ -84,7 +109,6 @@ function ActiveReader() {
         setMainQuizData(null);
         setQuizError('');
         try {
-            // --- FIX: Add /api prefix ---
             const response = await api.post('/api/generate-quiz', { text: currentPageText });
             setMainQuizData(response.data);
         } catch (err) {
@@ -101,6 +125,10 @@ function ActiveReader() {
     const keySentencesForPage = useMemo(() => (
         docValue?.keyConcepts?.[currentPage.toString()] || []
     ), [docValue, currentPage]);
+
+    const highlightsForPage = useMemo(() => (
+        highlights.filter(h => h.page === currentPage)
+    ), [highlights, currentPage]);
 
     if (authLoading || docLoading || (docValue && !pdf) && !docError) {
         return <div className="loading-screen"><h1>Loading Document...</h1></div>;
@@ -123,6 +151,8 @@ function ActiveReader() {
                         onPageRendered={handlePageRendered}
                         keySentences={keySentencesForPage}
                         onIconClick={handleIconClick}
+                        onSaveHighlight={handleSaveHighlight}
+                        highlights={highlightsForPage}
                     />
                     <div className="reader-controls">
                         <button onClick={goToPrevPage} disabled={currentPage <= 1} className="nav-button">

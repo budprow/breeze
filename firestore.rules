@@ -5,10 +5,25 @@ service cloud.firestore {
     // This rule allows a user to read/write ONLY to their own documents sub-collection.
     match /users/{userId}/documents/{docId} {
       allow read, write: if request.auth.uid == userId;
+      
+      // --- THIS IS THE FIX ---
+      // This allows access to ANY subcollection (like 'highlights') under a document,
+      // as long as the user owns the parent document.
+      match /{allPaths=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
     }
-    // This rule allows a user to read/write ONLY to their own quizzes sub-collection.
-    match /users/{userId}/quizzes/{quizId} {
-      allow read, write: if request.auth.uid == userId;
+    
+    // This rule allows a user to read/write ONLY to their own quizzes.
+    match /quizzes/{quizId} {
+      allow read, write: if request.auth.uid == resource.data.ownerId;
+      
+      // This allows the owner to read the results of their shared quizzes.
+      match /results/{resultId} {
+        allow read: if request.auth.uid == get(/databases/$(database)/documents/quizzes/$(quizId)).data.ownerId;
+        // This allows anyone who is logged in to write their own result.
+        allow create: if request.auth != null;
+      }
     }
   }
 }
