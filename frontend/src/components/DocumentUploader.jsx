@@ -22,15 +22,20 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
     onUpload(true); 
 
     try {
-      // Step 1: Upload the file to Firebase Storage
-      const filePath = `documents/${user.uid}/${file.name}`;
+      // --- THIS IS THE FIX ---
+      // The emulator requires the full bucket name to be included in the path,
+      // while the live version does not. We can get the bucket name directly
+      // from the storage instance to make this work in both environments.
+      const bucket = storage.ref().bucket;
+      const filePath = `gs://${bucket}/documents/${user.uid}/${file.name}`;
+      
       const storageRef = ref(storage, filePath);
       await uploadBytes(storageRef, file);
       console.log("File uploaded to Storage successfully!");
 
-      // Step 2: Save the initial file record to Firestore
       const docRef = await addDoc(collection(db, 'users', user.uid, 'documents'), {
         name: file.name,
+        // We save the full gs:// path to Firestore
         filePath: filePath,
         createdAt: serverTimestamp(),
         ownerId: user.uid
@@ -40,10 +45,9 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
       alert("File uploaded successfully! The AI is now analyzing it for key concepts.");
       onFileChange({ target: { files: [null] } }); 
 
-      // Trigger the backend processing in the background.
-      console.log("Triggering background AI processing for key concepts...");
       api.post('/api/documents/process', {
         documentId: docRef.id,
+        // We send the full gs:// path to the backend function
         filePath: filePath
       }).then(() => {
         console.log("Backend processing triggered successfully!");
@@ -65,7 +69,6 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
       <h3>Upload a Document</h3>
       <label className="uploader-label">
         {file ? `Selected: ${file.name}` : 'Choose Document (PDF)'}
-        {/* This "accept" attribute tells the browser to only allow PDF files */}
         <input type="file" onChange={onFileChange} style={{ display: 'none' }} accept=".pdf" />
       </label>
       
