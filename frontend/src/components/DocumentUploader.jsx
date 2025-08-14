@@ -23,20 +23,15 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
 
     try {
       // --- THIS IS THE FIX ---
-      // The emulator requires the full bucket name to be included in the path,
-      // while the live version does not. We can get the bucket name directly
-      // from the storage instance to make this work in both environments.
-      const bucket = storage.ref().bucket;
-      const filePath = `gs://${bucket}/documents/${user.uid}/${file.name}`;
-      
+      // Reverting to the simple, correct path format that works everywhere.
+      const filePath = `documents/${user.uid}/${file.name}`;
       const storageRef = ref(storage, filePath);
       await uploadBytes(storageRef, file);
       console.log("File uploaded to Storage successfully!");
 
       const docRef = await addDoc(collection(db, 'users', user.uid, 'documents'), {
         name: file.name,
-        // We save the full gs:// path to Firestore
-        filePath: filePath,
+        filePath: filePath, // Save the simple path
         createdAt: serverTimestamp(),
         ownerId: user.uid
       });
@@ -47,8 +42,7 @@ function DocumentUploader({ file, onFileChange, onUpload, uploading }) {
 
       api.post('/api/documents/process', {
         documentId: docRef.id,
-        // We send the full gs:// path to the backend function
-        filePath: filePath
+        filePath: filePath // Send the simple path
       }).then(() => {
         console.log("Backend processing triggered successfully!");
       }).catch(error => {
