@@ -145,15 +145,17 @@ function ActiveReader() {
             <h1 className="text-2xl font-bold mb-4 text-center">Active Reader: {docValue?.name}</h1>
             <div className="active-reader-container">
                 <div className="reader-column">
-                    <PdfViewer 
-                        pdf={pdf}
-                        pageNumber={currentPage}
-                        onPageRendered={handlePageRendered}
-                        keySentences={keySentencesForPage}
-                        onIconClick={handleIconClick}
-                        onSaveHighlight={handleSaveHighlight}
-                        highlights={highlightsForPage}
-                    />
+                    <div className="pdf-viewer-wrapper">
+                        <PdfViewer 
+                            pdf={pdf}
+                            pageNumber={currentPage}
+                            onPageRendered={handlePageRendered}
+                            keySentences={keySentencesForPage}
+                            onIconClick={handleIconClick}
+                            onSaveHighlight={handleSaveHighlight}
+                            highlights={highlightsForPage}
+                        />
+                    </div>
                     <div className="reader-controls">
                         <button onClick={goToPrevPage} disabled={currentPage <= 1} className="nav-button">
                           Previous

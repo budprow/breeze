@@ -15,4 +15,99 @@
     color: white;
     cursor: pointer;
     font-size: 14px;
+    }
+
+  /* Layout for Active Reader two-column split */
+  .active-reader-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 80vh;
+    gap: 24px;
+  }
+
+  /* Reader controls (Previous, Generate Quiz, Next) */
+  .reader-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 0;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    border-radius: 0 0 8px 8px;
+    margin-top: auto;
+  }
+
+  .reader-controls .nav-button,
+  .reader-controls .generate-page-quiz-btn {
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 8px;
+    border: 2px solid #007bff;
+    background: #fff;
+    color: #007bff;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    min-width: 100px;
+  }
+
+  .reader-controls .nav-button:hover:not(:disabled) {
+    background: #007bff;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+  }
+
+  .reader-controls .nav-button:disabled,
+  .reader-controls .generate-page-quiz-btn:disabled {
+    background: #f8f9fa;
+    color: #6c757d;
+    border-color: #dee2e6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .reader-controls .generate-page-quiz-btn {
+    background: #007bff;
+    color: #fff;
+    border: 2px solid #007bff;
+    font-weight: 600;
+  }
+
+  .reader-controls .generate-page-quiz-btn:hover:not(:disabled) {
+    background: #0056b3;
+    border-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 86, 179, 0.4);
+  }
+
+  .reader-column {
+    flex: 2;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .pdf-viewer-wrapper {
+    flex: 1;
+    overflow: auto;
+    margin-bottom: 0;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .quiz-column {
+    flex: 1;
+    min-width: 0;
+    background: #f9f9f9;
+    border-left: 1px solid #eee;
+    padding: 24px 16px;
+    overflow-y: auto;
   }

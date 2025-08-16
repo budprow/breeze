@@ -81,9 +81,7 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick,
           viewport: viewport,
         });
 
-        textLayer.render();
-
-        textLayer.promise.then(() => {
+        textLayer.render().then(() => {
             if (highlights && highlights.length > 0) {
                 const textLayerSpans = Array.from(textLayerDiv.querySelectorAll('span[role="presentation"]'));
                 const normalize = (str) => str.replace(/\s+/g, ' ').trim();
