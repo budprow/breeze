@@ -321,4 +321,124 @@ app.post('/create-invite', verifyFirebaseToken, async (req, res) => {
     }
   });
 
+// --- Endpoint for Generating Flashcards ---
+app.post("/api/generate-flashcards", verifyFirebaseToken, async (req, res) => {
+  const { selectedTexts, flashcardType = 'regular' } = req.body;
+  
+  if (!selectedTexts || !Array.isArray(selectedTexts) || selectedTexts.length === 0) {
+    return res.status(400).send("Missing or invalid selectedTexts array.");
+  }
+
+  if (!genAI) {
+    return res.status(500).send("Server is not configured with a Gemini API key.");
+  }
+
+  try {
+    // Combine all selected texts
+    const combinedTexts = selectedTexts.join("\n\n---\n\n");
+    
+    let prompt;
+    if (flashcardType === 'multiple-choice') {
+      prompt = `
+        Generate multiple choice questions from the following notes. For each note, create one multiple choice question with 4 options (A, B, C, D).
+        
+        Return the result as a JSON array of objects in the format: 
+        [{"question": "...", "options": ["option1", "option2", "option3", "option4"], "correctAnswer": "option1", "explanation": "..."}]
+        
+        Make sure:
+        - The question is clear and tests understanding
+        - One option is clearly correct
+        - The other 3 options are plausible but incorrect
+        - Include a brief explanation for why the correct answer is right
+        
+        Wrap your response in a \`\`\`json code block.
+        
+        Here are the notes to convert into quiz questions:
+        ---
+        ${combinedTexts}
+        ---
+      `;
+    } else {
+      prompt = `
+        Generate a set of flashcards from the following notes. For each note, create one flashcard with a 'front' (a question or key term) and a 'back' (the answer or definition). 
+        
+        Make the questions clear and specific. The answers should be comprehensive but concise.
+        
+        Return the result as a JSON array of objects in the format: [{"front": "...", "back": "..."}, ...]
+        
+        Wrap your response in a \`\`\`json code block.
+        
+        Here are the notes to convert into flashcards:
+        ---
+        ${combinedTexts}
+        ---
+      `;
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    const flashcards = parseJsonFromAiResponse(result.response.text());
+    
+    if (!flashcards) {
+      throw new Error('Failed to parse flashcards from AI response.');
+    }
+
+    // Validate based on flashcard type
+    let isValid = false;
+    if (flashcardType === 'multiple-choice') {
+      isValid = Array.isArray(flashcards) && flashcards.every(card => 
+        card.question && card.options && Array.isArray(card.options) && 
+        card.options.length === 4 && card.correctAnswer
+      );
+    } else {
+      isValid = Array.isArray(flashcards) && flashcards.every(card => card.front && card.back);
+    }
+
+    if (!isValid) {
+      throw new Error('AI response is not in the expected flashcard format.');
+    }
+
+    res.status(200).json({ flashcards });
+    
+  } catch (error) {
+    console.error("Error generating flashcards:", error);
+    res.status(500).send("An error occurred while generating flashcards.");
+  }
+});
+
+// --- Endpoint for Saving Highlights ---
+app.post("/api/highlights", verifyFirebaseToken, async (req, res) => {
+  const { documentId, pageNumber, selectedText } = req.body;
+  const userId = req.user.uid;
+  
+  if (!documentId || !pageNumber || !selectedText) {
+    return res.status(400).send("Missing documentId, pageNumber, or selectedText.");
+  }
+
+  try {
+    const highlightData = {
+      text: selectedText,
+      page: pageNumber,
+      createdAt: FieldValue.serverTimestamp(),
+      userId: userId
+    };
+
+    const highlightsColRef = db.collection('users').doc(userId).collection('documents').doc(documentId).collection('highlights');
+    const docRef = await highlightsColRef.add(highlightData);
+    
+    // Return the created highlight with its ID
+    const createdHighlight = {
+      id: docRef.id,
+      ...highlightData,
+      createdAt: new Date() // For immediate display, will be overwritten by server timestamp
+    };
+
+    res.status(201).json(createdHighlight);
+    
+  } catch (error) {
+    console.error("Error saving highlight:", error);
+    res.status(500).send("An error occurred while saving the highlight.");
+  }
+});
+
 exports.api = onRequest({ secrets: ["GEMINI_API_KEY"] }, app);
