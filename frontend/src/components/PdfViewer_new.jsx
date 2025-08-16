@@ -16,34 +16,21 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick,
   const stableOnIconClick = useCallback(onIconClick, [onIconClick]);
 
   const handleMouseUp = () => {
-    // Small delay to ensure the selection is stable
-    setTimeout(() => {
-      const selection = window.getSelection();
-      const selectedText = selection.toString().trim();
-
-      if (selectedText && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        const containerRect = textLayerRef.current?.getBoundingClientRect();
-        
-        if (containerRect) {
-          setTooltip({
-            show: true,
-            x: rect.left - containerRect.left + rect.width / 2,
-            y: rect.top - containerRect.top - 35, // Position above selection
-            text: selectedText,
-          });
-        }
-      } else {
-        setTooltip({ show: false, x: 0, y: 0, text: '' });
-      }
-    }, 10);
-  };
-
-  const handleClick = () => {
-    // Clear tooltip when clicking without selection
     const selection = window.getSelection();
-    if (!selection.toString().trim()) {
+    const selectedText = selection.toString().trim();
+
+    if (selectedText) {
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const containerRect = textLayerRef.current.getBoundingClientRect();
+      
+      setTooltip({
+        show: true,
+        x: rect.left - containerRect.left + rect.width / 2,
+        y: rect.top - containerRect.top - 35, // Position above selection
+        text: selectedText,
+      });
+    } else {
       setTooltip({ show: false, x: 0, y: 0, text: '' });
     }
   };
@@ -89,14 +76,6 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick,
         textLayerDiv.style.userSelect = 'text';
         textLayerDiv.style.pointerEvents = 'auto';
 
-        // Add debug logging
-        console.log('Text layer configured for text selection', {
-          position: textLayerDiv.style.position,
-          zIndex: textLayerDiv.style.zIndex,
-          userSelect: textLayerDiv.style.userSelect,
-          pointerEvents: textLayerDiv.style.pointerEvents
-        });
-
         renderTask.current = page.render({ canvasContext: context, viewport: viewport });
         await renderTask.current.promise;
         if (isCancelled) return;
@@ -112,8 +91,6 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick,
         });
 
         await textLayer.render();
-        
-        console.log('Text layer rendered. Text spans created:', textLayerDiv.querySelectorAll('span').length);
         
         // Apply highlights and key sentences after text layer is rendered
         if (highlights && highlights.length > 0) {
@@ -216,7 +193,6 @@ function PdfViewer({ pdf, pageNumber, onPageRendered, keySentences, onIconClick,
           ref={textLayerRef} 
           className="textLayer" 
           onMouseUp={handleMouseUp}
-          onClick={handleClick}
           style={{ 
             position: 'absolute', 
             left: 0, 

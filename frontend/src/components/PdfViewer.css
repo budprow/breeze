@@ -5,6 +5,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  user-select: text; /* Allow text selection in the container */
+  -webkit-user-select: text; /* Safari compatibility */
+  -moz-user-select: text; /* Firefox compatibility */
+  -ms-user-select: text; /* IE compatibility */
 }
 
 .pdf-canvas {
@@ -12,6 +16,9 @@
   height: auto;
   border: 1px solid #ccc;
   border-radius: 5px;
+  user-select: none; /* Prevent canvas from interfering with text selection */
+  pointer-events: none; /* Let pointer events pass through to text layer */
+  z-index: 1; /* Ensure canvas is below text layer */
 }
 
 /* This is the magic for the selectable text layer */
@@ -21,8 +28,14 @@
   top: 0;
   right: 0;
   bottom: 0;
-  opacity: 0.2; /* Make text layer slightly visible for debugging if needed */
+  opacity: 1; /* Full opacity for proper text selection */
   line-height: 1;
+  z-index: 2; /* Ensure text layer is above canvas */
+  user-select: text; /* Enable text selection */
+  -webkit-user-select: text; /* Safari compatibility */
+  -moz-user-select: text; /* Firefox compatibility */
+  -ms-user-select: text; /* IE compatibility */
+  pointer-events: auto; /* Enable pointer events for text selection */
 }
 
 .textLayer > span {
@@ -31,6 +44,27 @@
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
+  user-select: text; /* Enable text selection on individual spans */
+  -webkit-user-select: text; /* Safari compatibility */
+  -moz-user-select: text; /* Firefox compatibility */
+  -ms-user-select: text; /* IE compatibility */
+  pointer-events: auto; /* Enable pointer events */
+}
+
+/* Ensure text selection is visible */
+.textLayer > span::selection {
+  background-color: rgba(0, 123, 255, 0.3); /* Blue selection highlight */
+  color: transparent; /* Keep text transparent but show selection */
+}
+
+.textLayer > span::-moz-selection {
+  background-color: rgba(0, 123, 255, 0.3); /* Firefox compatibility */
+  color: transparent;
+}
+
+.textLayer > span::-webkit-selection {
+  background-color: rgba(0, 123, 255, 0.3); /* Webkit compatibility */
+  color: transparent;
 }
 
 /* Add these new styles to your PdfViewer.css file */
@@ -59,4 +93,37 @@
   justify-content: center;
   align-items: center;
   z-index: 1000;
+}
+
+/* Highlight tooltip styles */
+.highlight-tooltip {
+  position: absolute;
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  transform: translateX(-50%); /* Center the tooltip horizontally */
+}
+
+.highlight-tooltip button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.highlight-tooltip button:hover {
+  background-color: #0056b3;
+}
+
+/* Highlighted text styles */
+.highlighted {
+  background-color: rgba(255, 255, 0, 0.3);
+  padding: 1px 2px;
+  border-radius: 2px;
 }
